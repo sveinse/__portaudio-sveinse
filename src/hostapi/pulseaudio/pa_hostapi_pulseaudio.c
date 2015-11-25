@@ -62,17 +62,6 @@
 #include <string.h>
 #include <pulse/pulseaudio.h>
 
-
-/* prototypes for functions declared in this file */
-
-#define PA_PULSEAUDIO_SET_LAST_HOST_ERROR(errorCode, errorText) \
-    PaUtil_SetLastHostErrorInfo(paInDevelopment, errorCode, errorText)
-
-/* PaPulseaudioHostApiRepresentation - host api datastructure specific to this implementation */
-
-#define PULSEAUDIO_TIME_EVENT_USEC 50000
-#define PULSEAUDIO_BUFFER_SIZE (88100 * 4 * 2)
-
 /* This is used to identify process name for Pulseaudio. */
 extern char *__progname;
 
