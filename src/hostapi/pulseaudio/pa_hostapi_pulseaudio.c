@@ -948,7 +948,9 @@ static PaError OpenStream(
         result = PulseAudioConvertPortaudioFormatToPulseAudio(hostInputSampleFormat,
                                                               &stream->inSampleSpec);
         if (result != paNoError)
+        {
             goto error;
+        }
 
         stream->inSampleSpec.rate = sampleRate;
         stream->inSampleSpec.channels = inputChannelCount;
@@ -957,7 +959,7 @@ static PaError OpenStream(
         {
             PA_DEBUG(("Portaudio %s: Invalid input audio spec!\n",
                       __FUNCTION__));
-            result = paUnanticipatedHostError; // should have been caught above
+            result = paUnanticipatedHostError; /* should have been caught above */
             goto error;
         }
 
@@ -989,7 +991,9 @@ static PaError OpenStream(
             result = PulseAudioBlockingInitRingBuffer(stream, &stream->inputRing,
                                                       stream->inputFrameSize);
             if (result != paNoError)
+            {
                 goto error;
+            }
         }
 
     }
@@ -1041,7 +1045,9 @@ static PaError OpenStream(
         result = PulseAudioConvertPortaudioFormatToPulseAudio(hostOutputSampleFormat,
                                                               &stream->outSampleSpec);
         if (result != paNoError)
+        {
             goto error;
+        }
 
         stream->outSampleSpec.rate = sampleRate;
         stream->outSampleSpec.channels = outputChannelCount;
@@ -1050,7 +1056,7 @@ static PaError OpenStream(
         {
             PA_DEBUG(("Portaudio %s: Invalid audio spec for output!\n",
                       __FUNCTION__));
-            result = paUnanticipatedHostError; // should have been caught above
+            result = paUnanticipatedHostError; /* should have been caught above */
             goto error;
         }
 
@@ -1083,7 +1089,9 @@ static PaError OpenStream(
             result = PulseAudioBlockingInitRingBuffer(stream, &stream->outputRing,
                                                       stream->outputFrameSize);
             if (result != paNoError)
+            {
                 goto error;
+            }
         }
 
         stream->device = outputParameters->device;
