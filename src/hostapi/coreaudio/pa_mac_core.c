@@ -622,6 +622,7 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
     PaError err = paNoError;
 	CFStringRef nameRef;
     UInt32 propSize;
+    PaCoreAudioDeviceInfo *hostApiSpecificInfo = NULL;
 
     VVDBUG(("InitializeDeviceInfo(): macCoreDeviceId=%ld\n", macCoreDeviceId));
 
@@ -679,6 +680,15 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
     err = GetChannelInfo(auhalHostApi, deviceInfo, macCoreDeviceId, 0);
     if (err)
         return err;
+    
+    /* Set the HostAPI specific device information, which in CoreAudio is the macCoreDeviceID */
+    hostApiSpecificInfo = PaUtil_GroupAllocateMemory(auhalHostApi->allocations, sizeof(PaCoreAudioDeviceInfo));
+    if (hostApiSpecificInfo)
+    {
+        hostApiSpecificInfo->deviceId = macCoreDeviceId;
+        hostApiSpecificInfo->channels = 0;
+        deviceInfo->hostApiSpecificDeviceInfo = hostApiSpecificInfo;
+    }
 
     return paNoError;
 }
