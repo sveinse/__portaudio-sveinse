@@ -214,7 +214,7 @@ void PulseAudioStreamWriteCb(
     {
        /* This Shouldn't happen but we are here so note that and fill audio with silence */
        PA_DEBUG(("Portaudio %s: We are not in callback-mode but we are in callback!\n", __FUNCTION__));
-       memset(l_ptrStream->outBuffer, length, 0x00);
+       memset(l_ptrStream->outBuffer, 0x00, length);
     }
 
     if (l_iResult != paContinue)
