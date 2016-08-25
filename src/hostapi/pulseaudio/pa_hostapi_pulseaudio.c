@@ -277,6 +277,8 @@ int _PulseAudioAddAudioDevice(
     hostapi->deviceInfoArray[hostapi->deviceCount].defaultHighOutputLatency = defaultHighOutputLatency;
     hostapi->deviceInfoArray[hostapi->deviceCount].defaultSampleRate = defaultSampleRate;
     hostapi->deviceCount++;
+
+    return paNoError;
 }
 
 void PulseAudioSinkListCb(
