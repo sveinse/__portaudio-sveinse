@@ -86,8 +86,6 @@ void PulseAudioStreamReadCb(
     size_t l_lBufferSize = 0;
     const void *l_ptrSampleData = NULL;
 
-    assert(s);
-    assert(length > 0);
 
     if (l_ptrStream == NULL)
     {
@@ -170,8 +168,6 @@ void PulseAudioStreamWriteCb(
     long numFrames = 0;
     unsigned int i = 0;
 
-    assert(s);
-    assert(length > 0);
 
     if (l_ptrStream == NULL)
     {
@@ -262,7 +258,6 @@ static void PulseAudioStreamSuccessCb(
 )
 {
     PA_DEBUG(("Portaudio %s: %d\n", __FUNCTION__, success));
-    assert(s);
 }
 
 /* This is left for future use! */
@@ -271,7 +266,6 @@ void PulseAudioStreamStartedCb(
     void *userdata
 )
 {
-    assert(stream);
 }
 
 
