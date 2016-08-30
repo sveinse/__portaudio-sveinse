@@ -46,7 +46,7 @@
  @brief PulseAudio implementation of support for a host API.
 
  This host API implements PulseAudio support for portaudio
- it has callbackmode and normal write mode support
+ it has callback mode and normal write mode support
 */
 
 
@@ -529,7 +529,7 @@ PaError RealStop(
     stream->isActive = 0;
     stream->isStopped = 1;
 
-    /* We want playback just stop for a while */
+    /* Test if there is something that we can play */
     if (stream->outStream != NULL &&
         pa_stream_get_state(stream->outStream) == PA_STREAM_READY &&
         !pa_stream_is_corked(stream->outStream) &&
