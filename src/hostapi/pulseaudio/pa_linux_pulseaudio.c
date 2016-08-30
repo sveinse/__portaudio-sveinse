@@ -75,7 +75,7 @@ int PulseAudioCheckConnection(
 
     assert(ptr);
 
-    /* Sanity check if pre if NULL don't go anywhere or
+    /* Sanity check if ptr if NULL don't go anywhere or
      * it will SIGSEGV
      */
     if (!ptr)
@@ -116,7 +116,7 @@ PaPulseAudioHostApiRepresentation *PulseAudioNew(
         (PaPulseAudioHostApiRepresentation *)
         PaUtil_AllocateMemory(sizeof(PaPulseAudioHostApiRepresentation));
 
-    /* prt is NULL if runs out of memory or pointer to allocated memory */
+    /* ptr is NULL if runs out of memory or pointer to allocated memory */
     if (!ptr)
     {
         PA_PULSEAUDIO_SET_LAST_HOST_ERROR(0, "PulseAudio can't alloc memory");
@@ -171,7 +171,7 @@ void PulseAudioFree(
 {
     assert(ptr);
 
-    /* Sanity check if pre if NULL don't go anywhere or
+    /* Sanity check if ptr if NULL don't go anywhere or
      * it will SIGSEGV
      */
     if (!ptr)
@@ -235,7 +235,7 @@ int _PulseAudioAddAudioDevice(
     const long defaultSampleRate
 )
 {
-    /* These should be at leat 1 */
+    /* These should be at least 1 */
     int l_iRealNameLen = strnlen(PulseAudioSinkSourceNameDesc, 1024) + 1;
     int l_iDeviceNameLen = strnlen(PulseAudioSinkSourceName, 1024) + 1;
     char *l_ptrName = NULL;
@@ -415,7 +415,7 @@ void PulseAudioStreamStateCb(
             break;
 
         case PA_STREAM_READY:
-            /* Mainly here is you need debug printing
+            /* Mainly here if you need debug printing
              * 
              * fprintf(stderr, "PulseAudioStreamStateCb: Stream successfully created.\n");
              * 
