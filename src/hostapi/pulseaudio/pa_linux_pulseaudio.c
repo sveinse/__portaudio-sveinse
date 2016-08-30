@@ -73,7 +73,6 @@ int PulseAudioCheckConnection(
 {
     pa_context_state_t state;
 
-    assert(ptr);
 
     /* Sanity check if ptr if NULL don't go anywhere or
      * it will SIGSEGV
@@ -169,7 +168,6 @@ void PulseAudioFree(
     PaPulseAudioHostApiRepresentation * ptr
 )
 {
-    assert(ptr);
 
     /* Sanity check if ptr if NULL don't go anywhere or
      * it will SIGSEGV
@@ -207,7 +205,6 @@ static void PulseAudioCheckContextStateCb(
 )
 {
     PaPulseAudioHostApiRepresentation *ptr = userdata;
-    assert(c);
 
     /* If this is null we have big problems and we probably are out of memory */
     if (!c)
@@ -293,7 +290,6 @@ void PulseAudioSinkListCb(
     PaError result = paNoError;
     const char *l_strName = NULL;
 
-    assert(c);
 
     /* If this is null we have big problems and we probably are out of memory */
     if (!c)
@@ -344,7 +340,6 @@ void PulseAudioSourceListCb(
     PaError result = paNoError;
     const char *l_strName = NULL;
 
-    assert(c);
 
     /* If this is null we have big problems and we probably are out of memory */
     if (!c)
@@ -394,7 +389,6 @@ void PulseAudioStreamStateCb(
      * char cmt[PA_CHANNEL_MAP_SNPRINT_MAX], sst[PA_SAMPLE_SPEC_SNPRINT_MAX];
      */
 
-    assert(s);
 
     /* If this is null we have big problems and we probably are out of memory */
     if (!s)
@@ -451,7 +445,6 @@ void PulseAudioStreamUnderflowCb(
 {
     PaPulseAudioStream *stream = (PaPulseAudioStream *) userdata;
 
-    assert(s);
 
     /* If this is null we have big problems and we probably are out of memory */
     if (!s)
