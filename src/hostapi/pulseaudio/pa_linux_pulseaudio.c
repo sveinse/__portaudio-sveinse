@@ -1,6 +1,6 @@
 
 /*
- * $Id: pa_hostapi_pulseaudio.c 1668 2011-05-02 17:07:11Z rossb $
+ * $Id: pa_linux_pulseaudio.c 1668 2011-05-02 17:07:11Z rossb $
  * PulseAudio host to play natively in Linux based systems without
  * ALSA emulation
  *
@@ -53,9 +53,9 @@
 #include <string.h>     /* strlen() */
 
 
-#include "pa_hostapi_pulseaudio.h"
-#include "pa_hostapi_pulseaudio_cb.h"
-#include "pa_hostapi_pulseaudio_block.h"
+#include "pa_linux_pulseaudio.h"
+#include "pa_linux_pulseaudio_cb.h"
+#include "pa_linux_pulseaudio_block.h"
 
 
 /* PulseAudio headers */

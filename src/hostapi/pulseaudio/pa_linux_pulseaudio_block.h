@@ -16,7 +16,7 @@
 #include <string.h>
 #include <pulse/pulseaudio.h>
 
-#include "pa_hostapi_pulseaudio.h"
+#include "pa_linux_pulseaudio.h"
 
 #ifdef __cplusplus
 extern "C"
