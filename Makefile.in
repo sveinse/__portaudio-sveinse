@@ -113,6 +113,7 @@ TESTS = \
 	bin/patest_two_rates \
 	bin/patest_underflow \
 	bin/patest_wire \
+	bin/patest_refresh_device_list \
 	bin/pa_minlat
 
 # Most of these don't compile yet.  Put them in TESTS, above, if
