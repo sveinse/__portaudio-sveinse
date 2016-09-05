@@ -158,19 +158,19 @@ extern "C"
     PaHostApiIndex index
     );
 
-    static void Terminate(
+    void Terminate(
     struct PaUtilHostApiRepresentation *hostApi
     );
 
 
-    static PaError IsFormatSupported(
+    PaError IsFormatSupported(
     struct PaUtilHostApiRepresentation *hostApi,
     const PaStreamParameters * inputParameters,
     const PaStreamParameters * outputParameters,
     double sampleRate
     );
 
-    static PaError OpenStream(
+    PaError OpenStream(
     struct PaUtilHostApiRepresentation *hostApi,
     PaStream ** s,
     const PaStreamParameters * inputParameters,
@@ -183,17 +183,17 @@ extern "C"
     );
 
 
-    static PaError IsStreamStopped(
+    PaError IsStreamStopped(
     PaStream * s
     );
-    static PaError IsStreamActive(
+    PaError IsStreamActive(
     PaStream * stream
     );
 
-    static PaTime GetStreamTime(
+    PaTime GetStreamTime(
     PaStream * stream
     );
-    static double GetStreamCpuLoad(
+    double GetStreamCpuLoad(
     PaStream * stream
     );
 
@@ -208,7 +208,7 @@ extern "C"
     PaPulseAudioHostApiRepresentation * ptr
     );
 
-    static void PulseAudioCheckContextStateCb(
+    void PulseAudioCheckContextStateCb(
     pa_context * c,
     void *userdata
     );

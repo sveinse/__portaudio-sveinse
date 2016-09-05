@@ -199,7 +199,7 @@ void PulseAudioFree(
 }
 
 
-static void PulseAudioCheckContextStateCb(
+void PulseAudioCheckContextStateCb(
     pa_context * c,
     void *userdata
 )
@@ -670,7 +670,7 @@ PaError PaPulseAudio_Initialize(
 }
 
 
-static void Terminate(
+void Terminate(
     struct PaUtilHostApiRepresentation *hostApi
 )
 {
@@ -691,7 +691,7 @@ static void Terminate(
 }
 
 
-static PaError IsFormatSupported(
+PaError IsFormatSupported(
     struct PaUtilHostApiRepresentation *hostApi,
     const PaStreamParameters * inputParameters,
     const PaStreamParameters * outputParameters,
@@ -830,7 +830,7 @@ PaError PulseAudioConvertPortaudioFormatToPulseAudio(
 
 
 /* Allocate buffer. */
-static PaError PulseAudioBlockingInitRingBuffer(
+PaError PulseAudioBlockingInitRingBuffer(
     PaPulseAudioStream * stream,
     PaUtilRingBuffer * rbuf,
     int size
@@ -851,7 +851,7 @@ static PaError PulseAudioBlockingInitRingBuffer(
 
 /* see pa_hostapi.h for a list of validity guarantees made about OpenStream parameters */
 
-static PaError OpenStream(
+PaError OpenStream(
     struct PaUtilHostApiRepresentation *hostApi,
     PaStream ** s,
     const PaStreamParameters * inputParameters,
@@ -1172,7 +1172,7 @@ static PaError OpenStream(
     return result;
 }
 
-static PaError IsStreamStopped(
+PaError IsStreamStopped(
     PaStream * s
 )
 {
@@ -1181,7 +1181,7 @@ static PaError IsStreamStopped(
 }
 
 
-static PaError IsStreamActive(
+PaError IsStreamActive(
     PaStream * s
 )
 {
@@ -1190,7 +1190,7 @@ static PaError IsStreamActive(
 }
 
 
-static PaTime GetStreamTime(
+PaTime GetStreamTime(
     PaStream * s
 )
 {
@@ -1215,7 +1215,7 @@ static PaTime GetStreamTime(
 }
 
 
-static double GetStreamCpuLoad(
+double GetStreamCpuLoad(
     PaStream * s
 )
 {
