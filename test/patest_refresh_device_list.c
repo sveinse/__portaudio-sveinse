@@ -15,7 +15,8 @@ void printDevices()
         assert( deviceInfo != 0 );
         assert( deviceInfo->structVersion >= 3 ); /* should be the case if all APIs have implemented connectionId */
 
-        printf( "%d (conn id: %d) %s (%s)\n", i, deviceInfo->connectionId, deviceInfo->name, hostApiInfo->name );
+        printf( "%d (conn id: %d) %s (%s)\n",
+			i, (int) deviceInfo->connectionId, deviceInfo->name, hostApiInfo->name );
     }
 }
 
