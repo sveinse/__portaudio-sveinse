@@ -76,6 +76,9 @@
 #define PA_MAC_BLIO_MUTEX
 */
 
+#define PA_COREAUDIO_MIN_TIMEOUT_MSEC_ (1000)
+#define PA_COREAUDIO_MAX_TIMEOUT_MSEC_ (2000)
+
 typedef struct {
     PaUtilRingBuffer inputRingBuffer;
     PaUtilRingBuffer outputRingBuffer;
@@ -128,6 +131,6 @@ int BlioCallback(
         PaStreamCallbackFlags statusFlags,
         void *userData );
 
-void waitUntilBlioWriteBufferIsFlushed( PaMacBlio *blio );
+PaError waitUntilBlioWriteBufferIsFlushed( PaMacBlio *blio );
 
 #endif /*PA_MAC_CORE_BLOCKING_H_*/
