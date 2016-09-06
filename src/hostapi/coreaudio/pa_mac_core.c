@@ -877,7 +877,7 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
 		CFRelease(nameRef);
 	}
     deviceInfo->name = name;
-    deviceInfo->connectionId = PaUtil_MakeDeviceConnectionId();
+    deviceInfo->connectionId = 0;
 
     /* Try to get the default sample rate.  Don't fail if we can't get this. */
     propSize = sizeof(Float64);
@@ -3058,10 +3058,78 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 {
     PaMacAUHAL* auhalHostApi = (PaMacAUHAL*)hostApi;
     PaError result = paNoError;
-
-    hostApi->info.deviceCount = 0;
-    hostApi->info.defaultInputDevice = paNoDevice;
-    hostApi->info.defaultOutputDevice = paNoDevice;
+	
+	PaMacScanDeviceInfosResults *scanData = ( PaMacScanDeviceInfosResults * ) scanResults;
+	
+	/*
+		Assign connection IDs by comparing old and new deviceInfo.
+	*/
+	{
+		int i, j, matches, matchIndex;
+		
+		PaMacCoreDeviceInfo *cmpOld, *cmpNew;
+		
+		for (i = 0; i < scanData->devCount; ++i)
+		{
+			cmpNew = &scanData->macDeviceInfos[i];
+			
+			matches = 0;
+			for (j = 0; j < hostApi->info.deviceCount; ++j)
+			{
+				cmpOld = &auhalHostApi->macDeviceInfos[j];
+				
+				// Compare various fields, determining whether to maintain connectionId.
+				if (cmpOld->ADID == cmpNew->ADID &&
+					0 == strcmp(cmpOld->persistentIdentifier, cmpNew->persistentIdentifier) &&
+					0 == strcmp(cmpOld->connectionPath,       cmpNew->connectionPath))
+				{
+					if (cmpOld->inheritedDeviceInfo.connectionId == 0)
+					{
+						// Multiple new devices matched an old one...
+						VVDBUG(("  WARNING: MULTIPLE NEW DEVICES MATCH OLD DEVICE\n"));
+					}
+					else
+					{
+						++matches;
+						matchIndex = j;
+					}
+				}
+			}
+			
+			VVDBUG(("CommitDeviceInfos(): PI='%s', CP='%s', matches=%d, match=%d\n",
+				cmpNew->persistentIdentifier, cmpNew->connectionPath, matches, matchIndex));
+			
+			if (matches == 1)
+			{
+				cmpOld = &auhalHostApi->macDeviceInfos[matchIndex];
+				
+				// Preserve connection ID
+				cmpNew->inheritedDeviceInfo.connectionId =
+					cmpOld->inheritedDeviceInfo.connectionId;
+				
+				VVDBUG(("  ... Preserve ID %ld\n", (long) cmpNew->inheritedDeviceInfo.connectionId));
+				
+				// Prevent other devices from acquiring this ID
+				cmpOld->inheritedDeviceInfo.connectionId = 0;
+			}
+			else
+			{
+				if (matches > 1)
+				{
+					// Multiple old devices matched this new one...
+					VVDBUG(("  WARNING: MULTIPLE OLD DEVICES MATCH NEW DEVICE\n"));
+				}
+				cmpNew->inheritedDeviceInfo.connectionId =
+					PaUtil_MakeDeviceConnectionId();
+				
+				VVDBUG(("  ... Assign new ID %ld\n", (long) cmpNew->inheritedDeviceInfo.connectionId));
+			}
+		}
+	}
+	
+	hostApi->info.deviceCount = 0;
+	hostApi->info.defaultInputDevice = paNoDevice;
+	hostApi->info.defaultOutputDevice = paNoDevice;
 
     /* Free the old deviceInfos block.  (one block includes pointers and PaMacCoreDeviceInfos!) */
     if( hostApi->deviceInfos )
@@ -3072,24 +3140,22 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 
     if( scanResults != NULL )
     {
-        PaMacScanDeviceInfosResults *scanDeviceInfosResults = ( PaMacScanDeviceInfosResults * ) scanResults;
-
-        if( deviceCount > 0 )
+		if( deviceCount > 0 )
         {
             /* use the array allocated in ScanDeviceInfos() as our deviceInfos */
-            hostApi->deviceInfos = scanDeviceInfosResults->deviceInfos;
-            hostApi->info.defaultInputDevice = scanDeviceInfosResults->defaultInputDevice;
-            hostApi->info.defaultOutputDevice = scanDeviceInfosResults->defaultOutputDevice;
+            hostApi->deviceInfos = scanData->deviceInfos;
+            hostApi->info.defaultInputDevice = scanData->defaultInputDevice;
+            hostApi->info.defaultOutputDevice = scanData->defaultOutputDevice;
             hostApi->info.deviceCount = deviceCount;
 			
-            auhalHostApi->macDeviceInfos = scanDeviceInfosResults->macDeviceInfos;
-            auhalHostApi->devCount = scanDeviceInfosResults->devCount;
+            auhalHostApi->macDeviceInfos = scanData->macDeviceInfos;
+            auhalHostApi->devCount = scanData->devCount;
             //auhalHostApi->defaultIn = scanDeviceInfosResults->defaultInputDevice;
             //auhalHostApi->defaultOut = scanDeviceInfosResults->defaultOutputDevice;
         }
-
-        PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanDeviceInfosResults );
     }
+	
+	PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanData );
 
     return result;
 }
