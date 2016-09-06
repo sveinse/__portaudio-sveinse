@@ -3004,6 +3004,24 @@ static double GetStreamCpuLoad( PaStream* s )
     return PaUtil_GetCpuLoad( &stream->cpuLoadMeasurer );
 }
 
+
+static void PaMacCoreDeviceInfo_free(PaMacAUHAL *auhalHostApi, PaDeviceInfo **infos, int count)
+{
+	int i;
+	for (i = 0; i < count; ++i)
+	{
+		PaDeviceInfo        *info = infos[i];
+		PaMacCoreDeviceInfo *macInfo = (PaMacCoreDeviceInfo*) info;
+		if (info->name)
+			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (void*) info->name );
+		if (macInfo->persistentIdentifier)
+			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (void*) macInfo->persistentIdentifier );
+	}
+	
+	PaUtil_GroupFreeMemory( auhalHostApi->allocations, infos );
+}
+
+
 static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHostApiIndex hostApiIndex,
     void **scanResults, int *newDeviceCount)
 {
@@ -3060,25 +3078,18 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
             }
         }
     }
+	
+	//Sanity check to safeguard against logic errors.
+	if (acceptCount != scanData->devCount)
+	{
+		PaMacCoreDeviceInfo_free( auhalHostApi, scanData->deviceInfos, auhalHostApi->devCount );
+		PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanData );
+		return paUnanticipatedHostError;
+	}
+	
     *newDeviceCount = acceptCount;
 
     return paNoError;
-}
-
-static void PaMacCoreDeviceInfo_free(PaMacAUHAL *auhalHostApi, PaDeviceInfo **infos, int count)
-{
-	int i;
-	for (i = 0; i < count; ++i)
-	{
-		PaDeviceInfo        *info = infos[i];
-		PaMacCoreDeviceInfo *macInfo = (PaMacCoreDeviceInfo*) info;
-		if (info->name)
-			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (void*) info->name );
-		if (macInfo->persistentIdentifier)
-			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (void*) macInfo->persistentIdentifier );
-	}
-	
-	PaUtil_GroupFreeMemory( auhalHostApi->allocations, infos );
 }
 
 /*
