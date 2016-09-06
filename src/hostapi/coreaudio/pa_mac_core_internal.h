@@ -108,8 +108,8 @@ typedef struct
     AudioDeviceID ADID;
 
     /* Proposed new paDeviceInfo fields, used to track connectionId */
-    char *connectionPath;
-    char *persistentIdentifier;
+    const char *connectionPath;
+    const char *persistentIdentifier;
 }
 PaMacCoreDeviceInfo;
 

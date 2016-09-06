@@ -734,11 +734,12 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
     deviceInfo->structVersion = 3;
     deviceInfo->hostApi = hostApiIndex;
 
-#if 0
-	// Device UID and transport code from libjitsi.  May use this for persistentID/connectionPath later.
+#if 1
+	// Device UID and transport code from libjitsi.
+	// May use this for persistentIdentifier/connectionPath later.
 
     // target device UID property
-    unsigned long deviceUID = 0;
+    // unsigned long deviceUID = 0;
 
     AudioObjectPropertyAddress addr;
     addr.mSelector = kAudioDevicePropertyDeviceUID;
@@ -763,14 +764,14 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
     if ( !ASCIIDeviceUID )
         return paInsufficientMemory;
 
-    deviceInfo->deviceUID = NULL;
+    macDeviceInfo->persistentIdentifier = NULL;
     if(CFStringGetCString (
             deviceUIDString,
             ASCIIDeviceUID,
             deviceUIDLength,
             kCFStringEncodingASCII))
     {
-        deviceInfo->deviceUID = ASCIIDeviceUID;
+        macDeviceInfo->persistentIdentifier = ASCIIDeviceUID;
     }
 
     // target device transport type property
@@ -789,55 +790,60 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
             &transportType));
     if (err)
         return err;
+	
+	const char *transportStr;
 
     switch(transportType)
     {
         case kAudioDeviceTransportTypeAggregate:
-            deviceInfo->transportType = "Aggregate";
+            transportStr = "Aggregate";
             break;
         case kAudioDeviceTransportTypeAirPlay:
-            deviceInfo->transportType = "AirPlay";
+            transportStr = "AirPlay";
             break;
         case kAudioDeviceTransportTypeAutoAggregate:
-            deviceInfo->transportType = "Auto aggregate";
+            transportStr = "Auto aggregate";
             break;
         case kAudioDeviceTransportTypeAVB:
-            deviceInfo->transportType = "AVB";
+            transportStr = "AVB";
             break;
         case kAudioDeviceTransportTypeBluetooth:
-            deviceInfo->transportType = "Bluetooth";
+            transportStr = "Bluetooth";
             break;
         case kAudioDeviceTransportTypeBuiltIn:
-            deviceInfo->transportType = "Built-in";
+            transportStr = "Built-in";
             break;
         case kAudioDeviceTransportTypeDisplayPort:
-            deviceInfo->transportType = "DisplayPort";
+            transportStr = "DisplayPort";
             break;
         case kAudioDeviceTransportTypeFireWire:
-            deviceInfo->transportType = "FireWire";
+            transportStr = "FireWire";
             break;
         case kAudioDeviceTransportTypeHDMI:
-            deviceInfo->transportType = "HDMI";
+            transportStr = "HDMI";
             break;
         case kAudioDeviceTransportTypePCI:
-            deviceInfo->transportType = "PCI";
+            transportStr = "PCI";
             break;
         case kAudioDeviceTransportTypeThunderbolt:
-            deviceInfo->transportType = "Thunderbolt";
+            transportStr = "Thunderbolt";
             break;
         case kAudioDeviceTransportTypeUnknown:
-            deviceInfo->transportType = "Unknown";
+            transportStr = "Unknown";
             break;
         case kAudioDeviceTransportTypeUSB:
-            deviceInfo->transportType = "USB";
+            transportStr = "USB";
             break;
         case kAudioDeviceTransportTypeVirtual:
-            deviceInfo->transportType = "Virtual";
+            transportStr = "Virtual";
             break;
         default:
-            deviceInfo->transportType = NULL;
+            transportStr = "Unknown Transport";
             break;
     }
+	
+	macDeviceInfo->connectionPath = transportStr;
+	
 #endif
 
     /* Get the device name using CFString */
