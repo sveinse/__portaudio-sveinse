@@ -12,10 +12,10 @@ typedef struct PaMacCoreHotplugState
 }
 	PaMacCoreHotplugState;
 
-static PaMacCoreHotplugState paMacCoreHotplugState;
+static PaMacCoreHotplugState paMacHotplugState;
 
 
-static OSStatus PaMacCoreHardwarePropertyListener
+static OSStatus PaMacDevicesChanged
 	(AudioHardwarePropertyID inPropertyID, void *userData)
 {
 	//PaMacCoreHotplugState *hotplugState = (PaMacCoreHotplugState*) userData;
@@ -31,11 +31,10 @@ void PaUtil_InitializeHotPlug()
 {
 	OSStatus err = noErr;
 	
-	// Add property listener
-	err = AudioHardwareAddPropertyListener(
-		kAudioHardwarePropertyDevices,
-		&PaMacCoreHardwarePropertyListener,
-		&paMacCoreHotplugState);
+	// Add property listeners
+	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDevices,             &PaMacDevicesChanged, &paMacHotplugState);
+	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDefaultInputDevice,  &PaMacDevicesChanged, &paMacHotplugState);
+	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDefaultOutputDevice, &PaMacDevicesChanged, &paMacHotplugState);
 	
 	if (err)
 	{
@@ -45,9 +44,9 @@ void PaUtil_InitializeHotPlug()
 void PaUtil_TerminateHotPlug()
 {
 	// Remove property listener
-	AudioHardwareRemovePropertyListener(
-		kAudioHardwarePropertyDevices,
-		&PaMacCoreHardwarePropertyListener);
+	AudioHardwareRemovePropertyListener(kAudioHardwarePropertyDevices,             &PaMacDevicesChanged);
+	AudioHardwareRemovePropertyListener(kAudioHardwarePropertyDefaultInputDevice,  &PaMacDevicesChanged);
+	AudioHardwareRemovePropertyListener(kAudioHardwarePropertyDefaultOutputDevice, &PaMacDevicesChanged);
 }
 
 void PaUtil_LockHotPlug() {}
