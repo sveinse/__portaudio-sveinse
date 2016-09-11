@@ -15,7 +15,7 @@
  * Olivier Tristan for feedback and testing
  * Glenn Zelniker and Z-Systems engineering for sponsoring the Blocking I/O
  * interface.
- *
+ * 
  *
  * Based on the Open Source API proposed by Ross Bencina
  * Copyright (c) 1999-2002 Ross Bencina, Phil Burk
@@ -41,13 +41,13 @@
  */
 
 /*
- * The text above constitutes the entire PortAudio license; however,
+ * The text above constitutes the entire PortAudio license; however, 
  * the PortAudio community also makes the following non-binding requests:
  *
  * Any person wishing to distribute modifications to the Software is
  * requested to send the modifications to the original developer so that
- * they can be incorporated into the canonical version. It is also
- * requested that these non-binding requests be included along with the
+ * they can be incorporated into the canonical version. It is also 
+ * requested that these non-binding requests be included along with the 
  * license above.
  */
 
@@ -77,12 +77,12 @@
 extern "C"
 {
 #endif /* __cplusplus */
-
+    
 /* This is a reasonable size for a small buffer based on experience. */
 #define PA_MAC_SMALL_BUFFER_SIZE    (64)
-
+    
 /* prototypes for functions declared in this file */
-
+    
 PaError PaMacCore_Initialize( PaUtilHostApiRepresentation **hostApi, PaHostApiIndex index );
 static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHostApiIndex index,
     void **newDeviceInfos, int *newDeviceCount );
@@ -159,7 +159,7 @@ const char *PaMacCore_GetChannelName( int device, int channelIndex, bool input )
 	PaMacAUHAL *macCoreHostApi = (PaMacAUHAL*)hostApi;
 	AudioDeviceID hostApiDevice = macCoreHostApi->macDeviceInfos[device].coreAudioDeviceID;
 	CFStringRef nameRef;
-
+	
 	/* First try with CFString */
 	UInt32 size = sizeof(nameRef);
 	error = AudioDeviceGetProperty( hostApiDevice,
@@ -182,23 +182,23 @@ const char *PaMacCore_GetChannelName( int device, int channelIndex, bool input )
 		{
 			if( !ensureChannelNameSize( size ) )
 				return NULL;
-
+			
 			error = AudioDeviceGetProperty( hostApiDevice,
 										   channelIndex + 1,
 										   input,
 										   kAudioDevicePropertyChannelName,
 										   &size,
 										   channelName );
-
-
+			
+			
 			if( !error )
 				return channelName;
 		}
-
+		
 		/* as a last-ditch effort, we use the device name and append the channel number. */
 		nameRef = CFStringCreateWithFormat( NULL, NULL, CFSTR( "%s: %d"), hostApi->deviceInfos[device]->name, channelIndex + 1 );
-
-
+		
+		
 		size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(nameRef), kCFStringEncodingUTF8);;
 		if( !ensureChannelNameSize( size ) )
 		{
@@ -219,19 +219,19 @@ const char *PaMacCore_GetChannelName( int device, int channelIndex, bool input )
 		CFStringGetCString( nameRef, channelName, size+1, kCFStringEncodingUTF8 );
 		CFRelease( nameRef );
 	}
-
+	
 	return channelName;
 }
 
-
+	
 PaError PaMacCore_GetBufferSizeRange( PaDeviceIndex device,
                                       long *minBufferSizeFrames, long *maxBufferSizeFrames )
 {
     PaError result;
     PaUtilHostApiRepresentation *hostApi;
-
+    
     result = PaUtil_GetHostApiRepresentation( &hostApi, paCoreAudio );
-
+    
     if( result == paNoError )
     {
         PaDeviceIndex hostApiDeviceIndex;
@@ -242,19 +242,19 @@ PaError PaMacCore_GetBufferSizeRange( PaDeviceIndex device,
             AudioDeviceID macCoreDeviceId = macCoreHostApi->macDeviceInfos[hostApiDeviceIndex].coreAudioDeviceID;
             AudioValueRange audioRange;
             UInt32 propSize = sizeof( audioRange );
-
+            
             // return the size range for the output scope unless we only have inputs
             Boolean isInput = 0;
             if( macCoreHostApi->inheritedHostApiRep.deviceInfos[hostApiDeviceIndex]->maxOutputChannels == 0 )
                 isInput = 1;
-
+            
             result = WARNING(AudioDeviceGetProperty( macCoreDeviceId, 0, isInput, kAudioDevicePropertyBufferFrameSizeRange, &propSize, &audioRange ) );
-
+            
             *minBufferSizeFrames = audioRange.mMinimum;
             *maxBufferSizeFrames = audioRange.mMaximum;
         }
     }
-
+    
     return result;
 }
 
