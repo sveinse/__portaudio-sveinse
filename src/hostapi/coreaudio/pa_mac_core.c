@@ -103,9 +103,8 @@ typedef struct PaMacScanDeviceInfosResults
     PaDeviceIndex        defaultInputDevice;
     PaDeviceIndex        defaultOutputDevice;
 
-    //AudioDeviceID* devIds;
-    AudioDeviceID defaultInputADID;
-    AudioDeviceID defaultOutputADID;
+    AudioDeviceID defaultInputCoreAudioDeviceID;
+    AudioDeviceID defaultOutputCoreAudioDeviceID;
 } PaMacScanDeviceInfosResults;
 
 /*
@@ -158,7 +157,7 @@ const char *PaMacCore_GetChannelName( int device, int channelIndex, bool input )
 	if( err != paNoError )
 		return NULL;
 	PaMacAUHAL *macCoreHostApi = (PaMacAUHAL*)hostApi;
-	AudioDeviceID hostApiDevice = macCoreHostApi->macDeviceInfos[device].ADID;
+	AudioDeviceID hostApiDevice = macCoreHostApi->macDeviceInfos[device].coreAudioDeviceID;
 	CFStringRef nameRef;
 
 	/* First try with CFString */
@@ -240,7 +239,7 @@ PaError PaMacCore_GetBufferSizeRange( PaDeviceIndex device,
         if( result == paNoError )
         {
             PaMacAUHAL *macCoreHostApi = (PaMacAUHAL*)hostApi;
-            AudioDeviceID macCoreDeviceId = macCoreHostApi->macDeviceInfos[hostApiDeviceIndex].ADID;
+            AudioDeviceID macCoreDeviceId = macCoreHostApi->macDeviceInfos[hostApiDeviceIndex].coreAudioDeviceID;
             AudioValueRange audioRange;
             UInt32 propSize = sizeof( audioRange );
 
@@ -367,14 +366,12 @@ static void startStopCallback(
 /*
 	This function scans for the current device list during initialization or refresh.
 */
-//static PaError gatherDeviceInfo(PaMacAUHAL *auhalHostApi)
 static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResults, int* count)
 {
     UInt32         deviceIdListSize = 0;
 	AudioDeviceID *deviceIDList     = NULL;
-    UInt32 sizeOfADID = sizeof(AudioDeviceID);
+    UInt32 sizeOfAudioDeviceID = sizeof(AudioDeviceID);
     PaMacScanDeviceInfosResults *scanData = NULL;
-    /* PaError result = paNoError; */
 
     VVDBUG(("gatherDeviceInfo()\n"));
     /* -- figure out how many devices there are -- */
@@ -397,8 +394,8 @@ static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResults, in
 		if( !scanData ) return paInsufficientMemory;
 
 		scanData->devCount = *count;
-		scanData->defaultInputADID  = kAudioDeviceUnknown;
-		scanData->defaultOutputADID = kAudioDeviceUnknown;
+		scanData->defaultInputCoreAudioDeviceID  = kAudioDeviceUnknown;
+		scanData->defaultOutputCoreAudioDeviceID = kAudioDeviceUnknown;
 
 		/* Allocate DeviceInfo lookup table and MacCoreDeviceInfo array. */
 		scanData->deviceInfos = (PaDeviceInfo**) PaUtil_GroupAllocateMemory(
@@ -417,7 +414,7 @@ static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResults, in
     }
 
     /*
-		Copy the device ID list to the DeviceInfo buffer, then shuffle IDs into ADID fields.
+		Copy the device ID list to the DeviceInfo buffer, then shuffle IDs into coreAudioDeviceID fields.
 			We use the DeviceInfo buffer oddly here to avoid a temporary allocation.
 			Note that this might have issues with strict aliasing...
     */
@@ -437,7 +434,7 @@ static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResults, in
 		/* Copy device ID list into macDeviceInfos.  Copy pointers info deviceInfos. */
 		for (i = 0; i < scanData->devCount; ++i)
 		{
-			scanData->macDeviceInfos[i].ADID = deviceIDList[i];
+			scanData->macDeviceInfos[i].coreAudioDeviceID = deviceIDList[i];
 			scanData->deviceInfos[i] = &scanData->macDeviceInfos[i].inheritedDeviceInfo;
 		}
 	}
@@ -447,11 +444,11 @@ static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResults, in
 	*/
     {
     	if( 0 != AudioHardwareGetProperty(kAudioHardwarePropertyDefaultInputDevice,
-						 &sizeOfADID,
-						 &scanData->defaultInputADID) )
+						 &sizeOfAudioDeviceID,
+						 &scanData->defaultInputCoreAudioDeviceID) )
 		{
 			int i;
-			scanData->defaultInputADID = kAudioDeviceUnknown;
+			scanData->defaultInputCoreAudioDeviceID = kAudioDeviceUnknown;
 			VDBUG(("Failed to get default input device from OS."));
 			VDBUG((" I will substitute the first available input Device."));
 
@@ -459,36 +456,36 @@ static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResults, in
 			{
 				PaDeviceInfo *devInfo = &scanData->macDeviceInfos[i].inheritedDeviceInfo;
 				if( 0 != GetChannelInfo( auhalHostApi, devInfo,
-									   scanData->macDeviceInfos[i].ADID, TRUE ) )
+									   scanData->macDeviceInfos[i].coreAudioDeviceID, TRUE ) )
 				 if( devInfo->maxInputChannels ) {
-					scanData->defaultInputADID = scanData->macDeviceInfos[i].ADID;
+					scanData->defaultInputCoreAudioDeviceID = scanData->macDeviceInfos[i].coreAudioDeviceID;
 					break;
 				 }
 			}
 		}
 		if( 0 != AudioHardwareGetProperty(kAudioHardwarePropertyDefaultOutputDevice,
-						 &sizeOfADID,
-						 &scanData->defaultOutputADID) )
+						 &sizeOfAudioDeviceID,
+						 &scanData->defaultOutputCoreAudioDeviceID) )
 		{
 			int i;
-			scanData->defaultOutputADID  = kAudioDeviceUnknown;
+			scanData->defaultOutputCoreAudioDeviceID  = kAudioDeviceUnknown;
 			VDBUG(("Failed to get default output device from OS."));
 			VDBUG((" I will substitute the first available output Device."));
 			for( i=0; i<scanData->devCount; ++i )
 			{
 				PaDeviceInfo *devInfo = &scanData->macDeviceInfos[i].inheritedDeviceInfo;
 				if( 0 != GetChannelInfo( auhalHostApi, devInfo,
-									   scanData->macDeviceInfos[i].ADID, FALSE ) )
+									   scanData->macDeviceInfos[i].coreAudioDeviceID, FALSE ) )
 				 if( devInfo->maxOutputChannels ) {
-					scanData->defaultOutputADID = scanData->macDeviceInfos[i].ADID;
+					scanData->defaultOutputCoreAudioDeviceID = scanData->macDeviceInfos[i].coreAudioDeviceID;
 					break;
 				 }
 			}
 		}
     }
 
-    VDBUG( ( "Default in : %ld\n", scanData->defaultInputADID ) );
-    VDBUG( ( "Default out: %ld\n", scanData->defaultOutputADID ) );
+    VDBUG( ( "Default in : %ld\n", scanData->defaultInputCoreAudioDeviceID ) );
+    VDBUG( ( "Default out: %ld\n", scanData->defaultOutputCoreAudioDeviceID ) );
 
     *scanResults = scanData;
     return paNoError;
@@ -714,7 +711,7 @@ static PaError GetChannelInfo( PaMacAUHAL *auhalHostApi,
 /* =================================================================================================== */
 static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
                                      PaMacCoreDeviceInfo *macDeviceInfo,
-                                     AudioDeviceID ADID,
+                                     AudioDeviceID coreAudioDeviceID,
                                      PaHostApiIndex hostApiIndex )
 {
     Float64 sampleRate;
@@ -731,141 +728,21 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
 
     deviceInfo->structVersion = 3;
     deviceInfo->hostApi = hostApiIndex;
-	macDeviceInfo->ADID = ADID;
-
-#if 1
-	// Device UID and transport code from libjitsi.
-	// Presently used for persistentIdentifier/connectionPath.
-
-    // target device UID property
-    // unsigned long deviceUID = 0;
-
-    AudioObjectPropertyAddress addr;
-    addr.mSelector = kAudioDevicePropertyDeviceUID;
-    addr.mScope = kAudioObjectPropertyScopeGlobal;
-    addr.mElement = kAudioObjectPropertyElementMaster;
-
-	// Get the device UID
-	{
-		CFStringRef uidRef;
-		
-		propSize = sizeof(uidRef);
-		err = ERR(AudioObjectGetPropertyData(
-            ADID,
-            &addr,
-            0,
-            NULL,
-            &propSize,
-            &uidRef));
-		if (err) goto error;
-		
-		CFIndex uidLength = CFStringGetLength(uidRef) + 1;
-		char *uidASCII
-			= PaUtil_GroupAllocateMemory(auhalHostApi->allocations,uidLength);
-		if ( !uidASCII )
-		{
-			err = paInsufficientMemory;
-			CFRelease(uidRef);
-			goto error;
-		}
-		
-		macDeviceInfo->persistentIdentifier = NULL;
-		if(CFStringGetCString (
-			uidRef,
-		 	uidASCII,
-			uidLength,
-			kCFStringEncodingASCII))
-		{
-			macDeviceInfo->persistentIdentifier = uidASCII;
-		}
-		
-		CFRelease(uidRef);
-	}
-
-    // target device transport type property
-    addr.mSelector = kAudioDevicePropertyTransportType;
-    addr.mScope = kAudioObjectPropertyScopeGlobal;
-    addr.mElement = kAudioObjectPropertyElementMaster;
-
-    unsigned int transportType = 0;
-    propSize = sizeof(transportType);
-    err = ERR(AudioObjectGetPropertyData(
-            ADID,
-            &addr,
-            0,
-            NULL,
-            &propSize,
-            &transportType));
-    if (err) goto error;
-	
-	const char *transportStr;
-
-    switch(transportType)
-    {
-        case kAudioDeviceTransportTypeAggregate:
-            transportStr = "Aggregate";
-            break;
-        case kAudioDeviceTransportTypeAirPlay:
-            transportStr = "AirPlay";
-            break;
-        case kAudioDeviceTransportTypeAutoAggregate:
-            transportStr = "Auto aggregate";
-            break;
-        case kAudioDeviceTransportTypeAVB:
-            transportStr = "AVB";
-            break;
-        case kAudioDeviceTransportTypeBluetooth:
-            transportStr = "Bluetooth";
-            break;
-        case kAudioDeviceTransportTypeBuiltIn:
-            transportStr = "Built-in";
-            break;
-        case kAudioDeviceTransportTypeDisplayPort:
-            transportStr = "DisplayPort";
-            break;
-        case kAudioDeviceTransportTypeFireWire:
-            transportStr = "FireWire";
-            break;
-        case kAudioDeviceTransportTypeHDMI:
-            transportStr = "HDMI";
-            break;
-        case kAudioDeviceTransportTypePCI:
-            transportStr = "PCI";
-            break;
-        case kAudioDeviceTransportTypeThunderbolt:
-            transportStr = "Thunderbolt";
-            break;
-        case kAudioDeviceTransportTypeUnknown:
-            transportStr = "Unknown";
-            break;
-        case kAudioDeviceTransportTypeUSB:
-            transportStr = "USB";
-            break;
-        case kAudioDeviceTransportTypeVirtual:
-            transportStr = "Virtual";
-            break;
-        default:
-            transportStr = "Unknown Transport";
-            break;
-    }
-	
-	macDeviceInfo->connectionPath = transportStr;
-	
-#endif
+	macDeviceInfo->coreAudioDeviceID = coreAudioDeviceID;
 
     /* Get the device name using CFString */
 	propSize = sizeof(nameRef);
-    err = ERR(AudioDeviceGetProperty(ADID, 0, 0, kAudioDevicePropertyDeviceNameCFString, &propSize, &nameRef));
+    err = ERR(AudioDeviceGetProperty(coreAudioDeviceID, 0, 0, kAudioDevicePropertyDeviceNameCFString, &propSize, &nameRef));
     if (err)
     {
 		/* Get the device name using c string.  Fail if we can't get it. */
-		err = ERR(AudioDeviceGetPropertyInfo(ADID, 0, 0, kAudioDevicePropertyDeviceName, &propSize, NULL));
+		err = ERR(AudioDeviceGetPropertyInfo(coreAudioDeviceID, 0, 0, kAudioDevicePropertyDeviceName, &propSize, NULL));
 		if (err) goto error;
 
 		name = PaUtil_GroupAllocateMemory(auhalHostApi->allocations,propSize+1);
 		if ( !name ) {err = paInsufficientMemory; goto error;}
 		
-		err = ERR(AudioDeviceGetProperty(ADID, 0, 0, kAudioDevicePropertyDeviceName, &propSize, name));
+		err = ERR(AudioDeviceGetProperty(coreAudioDeviceID, 0, 0, kAudioDevicePropertyDeviceName, &propSize, name));
 		if (err) goto error;
 	}
 	else
@@ -887,7 +764,7 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
 
     /* Try to get the default sample rate.  Don't fail if we can't get this. */
     propSize = sizeof(Float64);
-    err = ERR(AudioDeviceGetProperty(ADID, 0, 0, kAudioDevicePropertyNominalSampleRate, &propSize, &sampleRate));
+    err = ERR(AudioDeviceGetProperty(coreAudioDeviceID, 0, 0, kAudioDevicePropertyNominalSampleRate, &propSize, &sampleRate));
     if (err)
         deviceInfo->defaultSampleRate = 0.0;
     else
@@ -895,10 +772,10 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
 
     /* Get the maximum number of input and output channels.  Fail if we can't get this. */
 
-    err = GetChannelInfo(auhalHostApi, deviceInfo, ADID, 1);
+    err = GetChannelInfo(auhalHostApi, deviceInfo, coreAudioDeviceID, 1);
 	if (err) goto error;
 
-    err = GetChannelInfo(auhalHostApi, deviceInfo, ADID, 0);
+    err = GetChannelInfo(auhalHostApi, deviceInfo, coreAudioDeviceID, 0);
 	if (err) goto error;
 
     return paNoError;
@@ -907,8 +784,6 @@ error:
 	//Release strings to avoid a memory leak
 	if (deviceInfo->name)
 		PaUtil_GroupFreeMemory(auhalHostApi->allocations, (void*) deviceInfo->name);
-	if (macDeviceInfo->persistentIdentifier)
-		PaUtil_GroupFreeMemory(auhalHostApi->allocations, (void*) macDeviceInfo->persistentIdentifier);
 	return err;
 }
 
@@ -958,8 +833,6 @@ PaError PaMacCore_Initialize( PaUtilHostApiRepresentation **hostApi, PaHostApiIn
 
     auhalHostApi->devCount = 0;
     auhalHostApi->macDeviceInfos = NULL;
-    //auhalHostApi->defaultIn = 0;
-    //auhalHostApi->defaultOut = 0;
 
     *hostApi = &auhalHostApi->inheritedHostApiRep;
     (*hostApi)->info.structVersion = 1;
@@ -979,7 +852,7 @@ PaError PaMacCore_Initialize( PaUtilHostApiRepresentation **hostApi, PaHostApiIn
     if(result != paNoError)
         goto error;
 
-    /* FIXME for now we ignore the result of CommitDeviceInfos(), it should probably be an atomic non-failing operation */
+    /* We ignore the result of CommitDeviceInfos(), it is an atomic non-failing operation. */
     CommitDeviceInfos( &auhalHostApi->inheritedHostApiRep, hostApiIndex, scanResults, deviceCount );
 
     (*hostApi)->Terminate = Terminate;
@@ -1460,7 +1333,7 @@ static PaError OpenAndSetupOneAudioUnit(
     }
     if( inStreamParams )
     {
-       *audioDevice = auhalHostApi->macDeviceInfos[inStreamParams->device].ADID ;
+       *audioDevice = auhalHostApi->macDeviceInfos[inStreamParams->device].coreAudioDeviceID ;
        ERR_WRAP( AudioUnitSetProperty( *audioUnit,
                     kAudioOutputUnitProperty_CurrentDevice,
                     kAudioUnitScope_Global,
@@ -1470,7 +1343,7 @@ static PaError OpenAndSetupOneAudioUnit(
     }
     if( outStreamParams && outStreamParams != inStreamParams )
     {
-       *audioDevice = auhalHostApi->macDeviceInfos[outStreamParams->device].ADID ;
+       *audioDevice = auhalHostApi->macDeviceInfos[outStreamParams->device].coreAudioDeviceID ;
        ERR_WRAP( AudioUnitSetProperty( *audioUnit,
                     kAudioOutputUnitProperty_CurrentDevice,
                     kAudioUnitScope_Global,
@@ -1827,13 +1700,13 @@ static UInt32 CalculateOptimalBufferSize( PaMacAUHAL *auhalHostApi,
     // Clip to the capabilities of the device.
     if( inputParameters )
     {
-        ClipToDeviceBufferSize( auhalHostApi->macDeviceInfos[inputParameters->device].ADID,
+        ClipToDeviceBufferSize( auhalHostApi->macDeviceInfos[inputParameters->device].coreAudioDeviceID,
                                true, // In the old code isInput was false!
                                resultBufferSizeFrames, &resultBufferSizeFrames );
     }
     if( outputParameters )
     {
-        ClipToDeviceBufferSize( auhalHostApi->macDeviceInfos[outputParameters->device].ADID,
+        ClipToDeviceBufferSize( auhalHostApi->macDeviceInfos[outputParameters->device].coreAudioDeviceID,
                                false, resultBufferSizeFrames, &resultBufferSizeFrames );
     }
     VDBUG(("After querying hardware, setting block size to %ld.\n", resultBufferSizeFrames));
@@ -1982,12 +1855,12 @@ static PaError OpenStream( struct PaUtilHostApiRepresentation *hostApi,
 
     if( inputParameters )
     {
-        CalculateFixedDeviceLatency( auhalHostApi->macDeviceInfos[inputParameters->device].ADID, true, &fixedInputLatency );
+        CalculateFixedDeviceLatency( auhalHostApi->macDeviceInfos[inputParameters->device].coreAudioDeviceID, true, &fixedInputLatency );
         inputLatencyFrames += fixedInputLatency;
     }
     if( outputParameters )
     {
-        CalculateFixedDeviceLatency( auhalHostApi->macDeviceInfos[outputParameters->device].ADID, false, &fixedOutputLatency );
+        CalculateFixedDeviceLatency( auhalHostApi->macDeviceInfos[outputParameters->device].coreAudioDeviceID, false, &fixedOutputLatency );
         outputLatencyFrames += fixedOutputLatency;
 
     }
@@ -3002,17 +2875,14 @@ static double GetStreamCpuLoad( PaStream* s )
 }
 
 
-static void PaMacCoreDeviceInfo_free(PaMacAUHAL *auhalHostApi, PaDeviceInfo **infos, int count)
+static void FreeMacCoreDeviceInfo(PaMacAUHAL *auhalHostApi, PaDeviceInfo **infos, int count)
 {
 	int i;
 	for (i = 0; i < count; ++i)
 	{
 		PaDeviceInfo        *info = infos[i];
-		PaMacCoreDeviceInfo *macInfo = (PaMacCoreDeviceInfo*) info;
 		if (info->name)
 			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (void*) info->name );
-		if (macInfo->persistentIdentifier)
-			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (void*) macInfo->persistentIdentifier );
 	}
 	
 	PaUtil_GroupFreeMemory( auhalHostApi->allocations, infos );
@@ -3042,18 +2912,18 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
         {
             int err;
             err = InitializeDeviceInfo( auhalHostApi, &scanData->macDeviceInfos[i],
-                                      scanData->macDeviceInfos[i].ADID,
+                                      scanData->macDeviceInfos[i].coreAudioDeviceID,
                                       hostApiIndex );
             if (err == paNoError)
             {
             	/*
 					Set the default device indices.
             	*/
-                if (scanData->macDeviceInfos[i].ADID == scanData->defaultInputADID)
+                if (scanData->macDeviceInfos[i].coreAudioDeviceID == scanData->defaultInputCoreAudioDeviceID)
                 {
                     scanData->defaultInputDevice = acceptCount;
                 }
-                if (scanData->macDeviceInfos[i].ADID == scanData->defaultOutputADID)
+                if (scanData->macDeviceInfos[i].coreAudioDeviceID == scanData->defaultOutputCoreAudioDeviceID)
                 {
                     scanData->defaultOutputDevice = acceptCount;
                 }
@@ -3079,7 +2949,7 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 	//Sanity check to safeguard against logic errors.
 	if (acceptCount != scanData->devCount)
 	{
-		PaMacCoreDeviceInfo_free( auhalHostApi, scanData->deviceInfos, auhalHostApi->devCount );
+		FreeMacCoreDeviceInfo( auhalHostApi, scanData->deviceInfos, auhalHostApi->devCount );
 		PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanData );
 		return paUnanticipatedHostError;
 	}
@@ -3118,9 +2988,7 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 				cmpOld = &auhalHostApi->macDeviceInfos[j];
 				
 				// Compare various fields, determining whether to maintain connectionId.
-				if (cmpOld->ADID == cmpNew->ADID &&
-					0 == strcmp(cmpOld->persistentIdentifier, cmpNew->persistentIdentifier) &&
-					0 == strcmp(cmpOld->connectionPath,       cmpNew->connectionPath))
+				if (cmpOld->coreAudioDeviceID == cmpNew->coreAudioDeviceID)
 				{
 					if (cmpOld->inheritedDeviceInfo.connectionId == 0)
 					{
@@ -3135,8 +3003,7 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 				}
 			}
 			
-			VVDBUG(("CommitDeviceInfos(): PI='%s', CP='%s', matches=%d, match=%d\n",
-				cmpNew->persistentIdentifier, cmpNew->connectionPath, matches, matchIndex));
+			VVDBUG(("CommitDeviceInfos(): matches=%d, match=%d\n", matches, matchIndex));
 			
 			if (matches == 1)
 			{
@@ -3173,7 +3040,7 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
     /* Free the old deviceInfos block.  (one block includes pointers and PaMacCoreDeviceInfos!) */
     if( hostApi->deviceInfos )
     {
-        PaMacCoreDeviceInfo_free( auhalHostApi, hostApi->deviceInfos, auhalHostApi->devCount );
+        FreeMacCoreDeviceInfo( auhalHostApi, hostApi->deviceInfos, auhalHostApi->devCount );
         hostApi->deviceInfos = NULL;
     }
 
@@ -3209,7 +3076,7 @@ static PaError DisposeDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, v
         if( scanData->deviceInfos )
         {
             /* all device info structs are allocated in a block so we can destroy them here */
-			PaMacCoreDeviceInfo_free( auhalHostApi, scanData->deviceInfos, scanData->devCount );
+			FreeMacCoreDeviceInfo( auhalHostApi, scanData->deviceInfos, scanData->devCount );
         }
 
         PaUtil_GroupFreeMemory(auhalHostApi->allocations, scanData );

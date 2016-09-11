@@ -104,12 +104,7 @@ typedef struct
 {
     PaDeviceInfo inheritedDeviceInfo;
 
-    /* Core Audio device ID */
-    AudioDeviceID ADID;
-
-    /* Proposed new paDeviceInfo fields, used to track connectionId */
-    const char *connectionPath;
-    const char *persistentIdentifier;
+    AudioDeviceID coreAudioDeviceID;
 }
 PaMacCoreDeviceInfo;
 
@@ -125,12 +120,6 @@ typedef struct
     /* implementation specific data goes here */
     long devCount;
     PaMacCoreDeviceInfo *macDeviceInfos;
-    //PaMacCoreDeviceInfo *defaultIn, *defaultOut;
-
-	/*long devCount;
-    AudioDeviceID *devIds;
-    AudioDeviceID defaultIn;
-    AudioDeviceID defaultOut;*/
 }
 PaMacAUHAL;
 
