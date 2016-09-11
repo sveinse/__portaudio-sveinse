@@ -66,6 +66,7 @@
 
 #include <string.h> /* strlen(), memcmp() etc. */
 #include <libkern/OSAtomic.h>
+#include <alloca.h> /* used to allocate Core Audio property query buffers */
 
 #include "pa_mac_core.h"
 #include "pa_mac_core_utilities.h"
@@ -370,7 +371,7 @@ static void startStopCallback(
 static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResults, int* count)
 {
     UInt32         deviceIdListSize = 0;
-	AudioDeviceID *deviceIDList     = NULL; // Aliasing hazard
+	AudioDeviceID *deviceIDList     = NULL;
     UInt32 sizeOfADID = sizeof(AudioDeviceID);
     PaMacScanDeviceInfosResults *scanData = NULL;
     /* PaError result = paNoError; */
@@ -399,9 +400,7 @@ static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResults, in
 		scanData->defaultInputADID  = kAudioDeviceUnknown;
 		scanData->defaultOutputADID = kAudioDeviceUnknown;
 
-		/*
-			Allocate DeviceInfo lookup table and MacCoreDeviceInfo array.
-		*/
+		/* Allocate DeviceInfo lookup table and MacCoreDeviceInfo array. */
 		scanData->deviceInfos = (PaDeviceInfo**) PaUtil_GroupAllocateMemory(
 					auhalHostApi->allocations,
 					(sizeof(PaDeviceInfo*)+sizeof(PaMacCoreDeviceInfo)) * scanData->devCount);
@@ -423,22 +422,20 @@ static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResults, in
 			Note that this might have issues with strict aliasing...
     */
 	{
-		deviceIDList = (AudioDeviceID *) scanData->macDeviceInfos;
+		int i;
+		
+		deviceIDList = (AudioDeviceID *) alloca(deviceIdListSize);
 
 		AudioHardwareGetProperty( kAudioHardwarePropertyDevices,
 									  &deviceIdListSize,
 									  deviceIDList );
 #ifdef MAC_CORE_VERBOSE_DEBUG
-		{
-		   int i;
-		   for( i=0; i<scanData->devCount; ++i )
-			  printf( "Device %d\t: %ld\n", i, deviceIDList[i] );
-		}
+		for( i=0; i<scanData->devCount; ++i )
+			printf( "Device %d\t: %ld\n", i, deviceIDList[i] );
 #endif
 
 		/* Copy device ID list into macDeviceInfos.  Copy pointers info deviceInfos. */
-		int i;
-		for (i = scanData->devCount; i--;)
+		for (i = 0; i < scanData->devCount; ++i)
 		{
 			scanData->macDeviceInfos[i].ADID = deviceIDList[i];
 			scanData->deviceInfos[i] = &scanData->macDeviceInfos[i].inheritedDeviceInfo;
