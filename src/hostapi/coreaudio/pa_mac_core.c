@@ -2747,32 +2747,15 @@ static PaError StartStream( PaStream *s )
 
 // it's not clear from appl's docs that this really waits
 // until all data is flushed.
-static ComponentResult BlockWhileAudioUnitIsRunning(
-        AudioUnit audioUnit,
-        AudioUnitElement element)
+static ComponentResult BlockWhileAudioUnitIsRunning( AudioUnit audioUnit, AudioUnitElement element)
 {
-    long waitTime = 100;
-    // If PaUtil_GetRingBufferWriteAvailable starts repetitively and
-    // consecutively returning that there is no data available, do eventually
-    // give up in order to allow the caller to handle such cases.
-    long totalTimeout = 0;
     Boolean isRunning = 1;
     while( isRunning ) {
        UInt32 s = sizeof( isRunning );
        ComponentResult err = AudioUnitGetProperty( audioUnit, kAudioOutputUnitProperty_IsRunning, kAudioUnitScope_Global, element,  &isRunning, &s );
        if( err )
           return err;
-       Pa_Sleep( waitTime );
-
-       // If a timeout is encountered, continue.  However, testing has
-       // shown that it is possible to unplug a device and to wait here
-       // forever. In order to allow the caller to handle such cases of
-       // repeated timeouts, do eventually given up.
-       totalTimeout += waitTime;
-       if( PA_COREAUDIO_MIN_TIMEOUT_MSEC_ <= totalTimeout)
-       {
-           return paTimedOut;
-       }
+       Pa_Sleep( 100 );
     }
     return noErr;
 }
