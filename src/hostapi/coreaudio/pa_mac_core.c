@@ -2960,7 +2960,39 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 }
 
 /*
-	CommitDeviceInfos is NOT ALLOWED TO FAIL!
+	Device-matching subroutine.  Returns 1 if matching, 0 otherwise.
+		Currently, only AudioDeviceID is considered.
+*/
+static bool MacCoreDevice_IsSame(
+	const PaMacCoreDeviceInfo *a, const PaMacCoreDeviceInfo *b)
+{
+	return (a->coreAudioDeviceID == b->coreAudioDeviceID);
+}
+
+/*
+	Find matching MacCoreDeviceInfo in a list.
+		Returns index on success or error code on failure:
+		-1:  No match
+		-2:  Multiple matches (ambiguous)
+*/
+static int MacCoreDevice_FindSingleMatch(
+	const PaMacCoreDeviceInfo *list, int count, const PaMacCoreDeviceInfo *device)
+{
+	int i = 0, match = -1, matchCount = 0;
+	for (i = 0; i < count; ++i)
+	{
+		if (MacCoreDevice_IsSame(device, &list[i]))
+		{
+			++matchCount;
+			match = i;
+		}
+	}
+	if (matchCount > 1) return -2;
+	return match;
+}
+
+/*
+	CommitDeviceInfos is an atomic non-failing operation.  Errors are not permissible!!
 */
 static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHostApiIndex index,
     void *scanResults, int deviceCount)
@@ -2971,64 +3003,55 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 	PaMacScanDeviceInfosResults *scanData = ( PaMacScanDeviceInfosResults * ) scanResults;
 	
 	/*
-		Assign connection IDs by comparing old and new deviceInfo.
+		Update connection IDs by correlating new deviceInfos (from scan) to existing ones.
+			Connections IDs are preserved when 1:1 matches are found, generated otherwise.
 	*/
 	{
-		int i, j, matches, matchIndex;
+		int i, matchIndex;
 		
-		PaMacCoreDeviceInfo *cmpOld, *cmpNew;
+		PaMacCoreDeviceInfo *deviceNew;
 		
 		for (i = 0; i < scanData->devCount; ++i)
 		{
-			cmpNew = &scanData->macDeviceInfos[i];
+			deviceNew = &scanData->macDeviceInfos[i];
 			
-			matches = 0;
-			for (j = 0; j < hostApi->info.deviceCount; ++j)
+			// Search for a single matching device in the old list.
+			matchIndex = MacCoreDevice_FindSingleMatch(
+				auhalHostApi->macDeviceInfos, hostApi->info.deviceCount, deviceNew);
+			
+			// If a single
+			if (matchIndex >= 0)
 			{
-				cmpOld = &auhalHostApi->macDeviceInfos[j];
+				PaMacCoreDeviceInfo *deviceOld = &auhalHostApi->macDeviceInfos[matchIndex];
 				
-				// Compare various fields, determining whether to maintain connectionId.
-				if (cmpOld->coreAudioDeviceID == cmpNew->coreAudioDeviceID)
+				// Confirm that ONLY this new device matches the old one.
+				if (i == MacCoreDevice_FindSingleMatch(
+					scanData->macDeviceInfos, scanData->devCount, deviceOld))
 				{
-					if (cmpOld->inheritedDeviceInfo.connectionId == 0)
-					{
-						// Multiple new devices matched an old one...
-						VVDBUG(("  WARNING: MULTIPLE NEW DEVICES MATCH OLD DEVICE\n"));
-					}
-					else
-					{
-						++matches;
-						matchIndex = j;
-					}
+					// Preserve connection ID
+					deviceNew->inheritedDeviceInfo.connectionId =
+						deviceOld->inheritedDeviceInfo.connectionId;
+					
+					VVDBUG(("  ... Preserved ID %ld\n", (long) deviceNew->inheritedDeviceInfo.connectionId));
+				}
+				else
+				{
+					// If multiple new devices match the old one, fall through to "no match" code.
+					VVDBUG(("  WARNING: MULTIPLE NEW DEVICES MATCH OLD DEVICE\n"));
+					matchIndex = -1;
 				}
 			}
 			
-			VVDBUG(("CommitDeviceInfos(): matches=%d, match=%d\n", matches, matchIndex));
 			
-			if (matches == 1)
+			if (matchIndex < 0)
 			{
-				cmpOld = &auhalHostApi->macDeviceInfos[matchIndex];
+				// No 1:1 match was found...
+				if (matchIndex == -2) VVDBUG(("  WARNING: MULTIPLE OLD DEVICES MATCH NEW DEVICE\n"));
 				
-				// Preserve connection ID
-				cmpNew->inheritedDeviceInfo.connectionId =
-					cmpOld->inheritedDeviceInfo.connectionId;
+				// Assign newly-generation connection ID
+				deviceNew->inheritedDeviceInfo.connectionId = PaUtil_MakeDeviceConnectionId();
 				
-				VVDBUG(("  ... Preserve ID %ld\n", (long) cmpNew->inheritedDeviceInfo.connectionId));
-				
-				// Prevent other devices from acquiring this ID
-				cmpOld->inheritedDeviceInfo.connectionId = 0;
-			}
-			else
-			{
-				if (matches > 1)
-				{
-					// Multiple old devices matched this new one...
-					VVDBUG(("  WARNING: MULTIPLE OLD DEVICES MATCH NEW DEVICE\n"));
-				}
-				cmpNew->inheritedDeviceInfo.connectionId =
-					PaUtil_MakeDeviceConnectionId();
-				
-				VVDBUG(("  ... Assign new ID %ld\n", (long) cmpNew->inheritedDeviceInfo.connectionId));
+				VVDBUG(("  ... Assigned new ID %ld\n", (long) deviceNew->inheritedDeviceInfo.connectionId));
 			}
 		}
 	}
