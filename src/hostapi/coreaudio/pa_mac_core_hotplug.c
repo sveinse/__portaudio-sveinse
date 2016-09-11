@@ -3,7 +3,7 @@
 		Notifies on device list changes and default I/O changes.
 */
 
-#include <pthread>
+#include <pthread.h>
 
 #include "pa_hotplug.h"
 
@@ -19,8 +19,6 @@ typedef struct PaMacCoreHotplugState
 	PaMacCoreHotplugState;
 
 static PaMacCoreHotplugState paMacCoreHotplugState;
-
-static
 
 
 static OSStatus PaMacDevicesChanged
@@ -43,9 +41,9 @@ void PaUtil_InitializeHotPlug()
 	pthread_mutex_init(&paMacCoreHotplugState.mutex, NULL);
 	
 	// Add property listeners
-	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDevices,             &PaMacDevicesChanged, &paMacHotplugState);
-	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDefaultInputDevice,  &PaMacDevicesChanged, &paMacHotplugState);
-	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDefaultOutputDevice, &PaMacDevicesChanged, &paMacHotplugState);
+	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDevices,             &PaMacDevicesChanged, &paMacCoreHotplugState);
+	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDefaultInputDevice,  &PaMacDevicesChanged, &paMacCoreHotplugState);
+	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDefaultOutputDevice, &PaMacDevicesChanged, &paMacCoreHotplugState);
 	
 	if (err)
 	{
