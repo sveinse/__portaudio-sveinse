@@ -36,6 +36,8 @@ ENDIF()
 # Set platform specific options
 INCLUDE(PaPlatformConfig)
 
+FIND_PACKAGE(Threads REQUIRED)
+
 # Start autoconfiguration
 IF(PA_USE_JACK)
     FIND_PACKAGE(Jack)
@@ -124,7 +126,7 @@ ENDIF(PA_USE_DS AND DXSDK_FOUND)
 
 IF(PA_USE_JACK AND JACK_FOUND)
     INCLUDE_DIRECTORIES(${JACK_INCLUDE_DIR})
-
+    LIST(APPEND PA_ENGINES ${JACK_LIBRARIES})
     SET(PA_JACK_INCLUDES
         include/pa_jack.h
         )
@@ -255,6 +257,14 @@ IF(WIN32)
         )
 
     SOURCE_GROUP("os\\win" FILES
+        ${PA_PLATFORM_SOURCES}
+        )
+ELSE()
+    SET(PA_PLATFORM_SOURCES
+        src/os/unix/pa_unix_hostapis.c
+        src/os/unix/pa_unix_util.c
+        )
+    SOURCE_GROUP("os\\unix" FILES
         ${PA_PLATFORM_SOURCES}
         )
 ENDIF(WIN32)
