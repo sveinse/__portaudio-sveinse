@@ -31,6 +31,7 @@ IF(WIN32)
     CMAKE_DEPENDENT_OPTION(PA_USE_DIRECTSOUNDFULLDUPLEXCREATE "Use DirectSound full duplex create" ON
         "PA_USE_DS" OFF)
 ELSE()
+    OPTION(PA_USE_ALSA "Enable support for ALSA" ON)
 ENDIF()
 
 # Set platform specific options
@@ -64,6 +65,13 @@ IF(WIN32)
             SET(DEF_EXCLUDE_ASIO_SYMBOLS ";")
         ENDIF()
     ENDIF()
+ELSE()
+    IF(PA_USE_ALSA)
+        FIND_PACKAGE(ALSA)
+        IF(NOT ALSA_FOUND)
+            SET(PA_USE_ALSA OFF)
+        ENDIF()
+    ENDIF()
 ENDIF(WIN32)
 
 # Set variables for DEF file expansion
@@ -74,7 +82,23 @@ ENDIF(NOT PA_USE_WASAPI)
 #######################################
 IF(WIN32)
     INCLUDE_DIRECTORIES(src/os/win)
+ELSE()
+    INCLUDE_DIRECTORIES(src/os/unix)
 ENDIF(WIN32)
+
+IF(PA_USE_ALSA AND ALSA_FOUND)
+    INCLUDE_DIRECTORIES(${ALSA_INCLUDE_DIRS})
+    LIST(APPEND PA_ENGINES ${ALSA_LIBRARIES})
+    SET(PA_ALSA_INCLUDES
+        include/pa_linux_alsa.h
+        )
+    SET(PA_ALSA_SOURCES
+        src/hostapi/alsa/pa_linux_alsa.c
+        )
+    SOURCE_GROUP("hostapi\\alsa" FILES
+        ${PA_ALSA_SOURCES}
+        )
+ENDIF()
 
 IF(PA_USE_ASIO AND ASIOSDK_FOUND)
     INCLUDE_DIRECTORIES(${ASIOSDK_ROOT_DIR}/common)
@@ -289,6 +313,7 @@ SET(SOURCES_LESS_ASIO_SDK
     ${PA_SKELETON_SOURCES}
     ${PA_PLATFORM_SOURCES}
     ${PA_JACK_SOURCES}
+    ${PA_ALSA_SOURCES}
     )
 
 IF(PA_UNICODE_BUILD)
