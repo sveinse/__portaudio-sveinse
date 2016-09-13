@@ -102,16 +102,16 @@ extern "C"
         pa_context_state_t state;
         pa_time_event *timeEvent;
     }
-    PaPulseAudioHostApiRepresentation;
+    PaPulseAudio_HostApiRepresentation;
 
-/* PaPulseAudioStream - a stream data structure specifically for this implementation */
+/* PaPulseAudio_Stream - a stream data structure specifically for this implementation */
 
-    typedef struct PaPulseAudioStream
+    typedef struct PaPulseAudio_Stream
     {
         PaUtilStreamRepresentation streamRepresentation;
         PaUtilCpuLoadMeasurer cpuLoadMeasurer;
         PaUtilBufferProcessor bufferProcessor;
-        PaPulseAudioHostApiRepresentation *hostapi;
+        PaPulseAudio_HostApiRepresentation *hostapi;
 
         PaUnixThread thread;
         unsigned long framesPerHostCallback;
@@ -151,7 +151,7 @@ extern "C"
         volatile sig_atomic_t isStopped;        /* Is stream in active state? (Between StartStream and StopStream || !paContinue) */
 
     }
-    PaPulseAudioStream;
+    PaPulseAudio_Stream;
 
     PaError PaPulseAudio_Initialize(
     PaUtilHostApiRepresentation ** hostApi,
@@ -197,48 +197,48 @@ extern "C"
     PaStream * stream
     );
 
-    PaPulseAudioHostApiRepresentation *PulseAudioNew(
+    PaPulseAudio_HostApiRepresentation *PaPulseAudio_New(
     void
     );
-    void PulseAudioFree(
-    PaPulseAudioHostApiRepresentation * ptr
+    void PaPulseAudio_Free(
+    PaPulseAudio_HostApiRepresentation * ptr
     );
 
-    int PulseAudioCheckConnection(
-    PaPulseAudioHostApiRepresentation * ptr
+    int PaPulseAudio_CheckConnection(
+    PaPulseAudio_HostApiRepresentation * ptr
     );
 
-    void PulseAudioCheckContextStateCb(
+    void PaPulseAudio_CheckContextStateCb(
     pa_context * c,
     void *userdata
     );
-    void PulseAudioSinkListCb(
+    void PaPulseAudio_SinkListCb(
     pa_context * c,
     const pa_sink_info * l,
     int eol,
     void *userdata
     );
-    void PulseAudioSourceListCb(
+    void PaPulseAudio_SourceListCb(
     pa_context * c,
     const pa_source_info * l,
     int eol,
     void *userdata
     );
 
-    void PulseAudioStreamStateCb(
+    void PaPulseAudio_StreamStateCb(
     pa_stream * s,
     void *userdata
     );
-    void PulseAudioStreamStartedCb(
+    void PaPulseAudio_StreamStartedCb(
     pa_stream * s,
     void *userdata
     );
-    void PulseAudioStreamUnderflowCb(
+    void PaPulseAudio_StreamUnderflowCb(
     pa_stream * s,
     void *userdata
     );
 
-    PaError PulseAudioConvertPortaudioFormatToPulseAudio(
+    PaError PaPulseAudio_ConvertPortaudioFormatToPaPulseAudio_(
     PaSampleFormat portaudiosf,
     pa_sample_spec * pulseaudiosf
     );

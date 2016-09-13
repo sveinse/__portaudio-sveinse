@@ -57,14 +57,14 @@
     for blocking streams.
 */
 
-PaError PulseAudioReadStreamBlock(
+PaError PaPulseAudio_ReadStreamBlock(
     PaStream * s,
     void *buffer,
     unsigned long frames
 )
 {
-    PaPulseAudioStream *l_ptrStream = (PaPulseAudioStream *) s;
-    PaPulseAudioHostApiRepresentation *l_ptrPulseAudioHostApi =
+    PaPulseAudio_Stream *l_ptrStream = (PaPulseAudio_Stream *) s;
+    PaPulseAudio_HostApiRepresentation *l_ptrPulseAudioHostApi =
         l_ptrStream->hostapi;
     PaError l_iRet = 0;
     size_t l_lReadable = 0;
@@ -86,14 +86,14 @@ PaError PulseAudioReadStreamBlock(
 }
 
 
-PaError PulseAudioWriteStreamBlock(
+PaError PaPulseAudio_WriteStreamBlock(
     PaStream * s,
     const void *buffer,
     unsigned long frames
 )
 {
-    PaPulseAudioStream *l_ptrStream = (PaPulseAudioStream *) s;
-    PaPulseAudioHostApiRepresentation *l_ptrPulseAudioHostApi =
+    PaPulseAudio_Stream *l_ptrStream = (PaPulseAudio_Stream *) s;
+    PaPulseAudio_HostApiRepresentation *l_ptrPulseAudioHostApi =
         l_ptrStream->hostapi;
     int l_iRet = 0;
     size_t l_lWritable = 0;
@@ -156,11 +156,11 @@ PaError PulseAudioWriteStreamBlock(
 }
 
 
-signed long PulseAudioGetStreamReadAvailableBlock(
+signed long PaPulseAudio_GetStreamReadAvailableBlock(
     PaStream * s
 )
 {
-    PaPulseAudioStream *l_ptrStream = (PaPulseAudioStream *) s;
+    PaPulseAudio_Stream *l_ptrStream = (PaPulseAudio_Stream *) s;
 
     if (l_ptrStream->inStream == NULL)
     {
@@ -172,12 +172,12 @@ signed long PulseAudioGetStreamReadAvailableBlock(
 }
 
 
-signed long PulseAudioGetStreamWriteAvailableBlock(
+signed long PaPulseAudio_GetStreamWriteAvailableBlock(
     PaStream * s
 )
 {
-    PaPulseAudioStream *l_ptrStream = (PaPulseAudioStream *) s;
-    PaPulseAudioHostApiRepresentation *l_ptrPulseAudioHostApi =
+    PaPulseAudio_Stream *l_ptrStream = (PaPulseAudio_Stream *) s;
+    PaPulseAudio_HostApiRepresentation *l_ptrPulseAudioHostApi =
         l_ptrStream->hostapi;
 
     if (l_ptrStream->outStream == NULL)
