@@ -63,6 +63,9 @@
 #include <string.h>
 #include <pulse/pulseaudio.h>
 
+#define PAPULSEAUDIO_MAX_DEVICECOUNT 1024
+#define PAPULSEAUDIO_MAX_DEVICENAME 1024
+
 /* This is used to identify process name for PulseAudio. */
 extern char *__progname;
 
@@ -233,8 +236,8 @@ int _PaPulseAudio_AddAudioDevice(
 )
 {
     /* These should be at least 1 */
-    int l_iRealNameLen = strnlen(PaPulseAudio_SinkSourceNameDesc, 1024) + 1;
-    int l_iDeviceNameLen = strnlen(PaPulseAudio_SinkSourceName, 1024) + 1;
+    int l_iRealNameLen = strnlen(PaPulseAudio_SinkSourceNameDesc, PAPULSEAUDIO_MAX_DEVICENAME) + 1;
+    int l_iDeviceNameLen = strnlen(PaPulseAudio_SinkSourceName, PAPULSEAUDIO_MAX_DEVICENAME) + 1;
     char *l_ptrName = NULL;
     char *l_strLocalName = NULL;
 
@@ -548,8 +551,8 @@ PaError PaPulseAudio_Initialize(
     }
 
     memset(l_ptrPulseAudioHostApi->deviceInfoArray, 0x00,
-           sizeof(PaDeviceInfo) * 1024);
-    for (i = 0; i < 1024; i++)
+           sizeof(PaDeviceInfo) * PAPULSEAUDIO_MAX_DEVICECOUNT);
+    for (i = 0; i < PAPULSEAUDIO_MAX_DEVICECOUNT; i++)
     {
         l_ptrPulseAudioHostApi->pulseaudioDeviceNames[i] = NULL;
     }
