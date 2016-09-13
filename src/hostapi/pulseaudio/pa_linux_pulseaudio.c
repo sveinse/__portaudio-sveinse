@@ -111,8 +111,8 @@ PaPulseAudio_HostApiRepresentation *PaPulseAudio_New(
 {
     PaPulseAudio_HostApiRepresentation *ptr;
     int fd[2] = { -1, -1 };
-    char proc[PATH_MAX];
-    char buf[PATH_MAX + 20];
+    char proc[PAPULSEAUDIO_MAX_DEVICENAME];
+    char buf[PAPULSEAUDIO_MAX_DEVICENAME];
 
     ptr =
         (PaPulseAudio_HostApiRepresentation *)
@@ -136,8 +136,8 @@ PaPulseAudio_HostApiRepresentation *PaPulseAudio_New(
         goto fail;
     }
 
-    memset(buf, 0x00, PATH_MAX + 20);
-    snprintf(buf, sizeof(buf), "%s", __progname);
+    memset(buf, 0x00, PAPULSEAUDIO_MAX_DEVICENAME);
+    snprintf(buf, PAPULSEAUDIO_MAX_DEVICENAME, "%s", __progname);
 
     ptr->context =
         pa_context_new(pa_threaded_mainloop_get_api(ptr->mainloop), buf);
