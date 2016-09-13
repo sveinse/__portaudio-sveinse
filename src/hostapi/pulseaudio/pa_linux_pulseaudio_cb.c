@@ -522,7 +522,7 @@ PaError PaPulseAudio_StartStreamCb(
     goto end;
 }
 
-PaError RealStop(
+PaError RequestStop(
     PaPulseAudio_Stream * stream,
     int abort
 )
@@ -574,7 +574,7 @@ PaError PaPulseAudio_StopStreamCb(
     PaStream * s
 )
 {
-    return RealStop((PaPulseAudio_Stream *) s, 0);
+    return RequestStop((PaPulseAudio_Stream *) s, 0);
 }
 
 
@@ -582,5 +582,5 @@ PaError PaPulseAudio_AbortStreamCb(
     PaStream * s
 )
 {
-    return RealStop((PaPulseAudio_Stream *) s, 1);
+    return RequestStop((PaPulseAudio_Stream *) s, 1);
 }
