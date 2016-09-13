@@ -70,13 +70,13 @@
 #include <string.h>
 #include <pulse/pulseaudio.h>
 
-void PulseAudioStreamReadCb(
+void PaPulseAudio_StreamReadCb(
     pa_stream * s,
     size_t length,
     void *userdata
 )
 {
-    PaPulseAudioStream *l_ptrStream = (PaPulseAudioStream *) userdata;
+    PaPulseAudio_Stream *l_ptrStream = (PaPulseAudio_Stream *) userdata;
     PaStreamCallbackTimeInfo timeInfo = { 0, 0, 0 };    /* TODO: IMPLEMENT ME */
     int l_iResult = paContinue;
     long numFrames = 0;
@@ -156,13 +156,13 @@ void PulseAudioStreamReadCb(
     }
 }
 
-void PulseAudioStreamWriteCb(
+void PaPulseAudio_StreamWriteCb(
     pa_stream * s,
     size_t length,
     void *userdata
 )
 {
-    PaPulseAudioStream *l_ptrStream = (PaPulseAudioStream *) userdata;
+    PaPulseAudio_Stream *l_ptrStream = (PaPulseAudio_Stream *) userdata;
     PaStreamCallbackTimeInfo timeInfo = { 0, 0, 0 };    /* TODO: IMPLEMENT ME */
     int l_iResult = paContinue;
     long numFrames = 0;
@@ -251,7 +251,7 @@ void PulseAudioStreamWriteCb(
 
 
 /* This is left for future use! */
-static void PulseAudioStreamSuccessCb(
+static void PaPulseAudio_StreamSuccessCb(
     pa_stream * s,
     int success,
     void *userdata
@@ -261,7 +261,7 @@ static void PulseAudioStreamSuccessCb(
 }
 
 /* This is left for future use! */
-void PulseAudioStreamStartedCb(
+void PaPulseAudio_StreamStartedCb(
     pa_stream * stream,
     void *userdata
 )
@@ -273,13 +273,13 @@ void PulseAudioStreamStartedCb(
     When CloseStream() is called, the multi-api layer ensures that
     the stream has already been stopped or aborted.
 */
-PaError PulseAudioCloseStreamCb(
+PaError PaPulseAudio_CloseStreamCb(
     PaStream * s
 )
 {
     PaError result = paNoError;
-    PaPulseAudioStream *stream = (PaPulseAudioStream *) s;
-    PaPulseAudioHostApiRepresentation *l_ptrPulseAudioHostApi = stream->hostapi;
+    PaPulseAudio_Stream *stream = (PaPulseAudio_Stream *) s;
+    PaPulseAudio_HostApiRepresentation *l_ptrPulseAudioHostApi = stream->hostapi;
     pa_operation *l_ptrOperation = NULL;
 
     if (stream->outStream != NULL && pa_stream_get_state(stream->outStream) == PA_STREAM_READY)
@@ -339,14 +339,14 @@ PaError PulseAudioCloseStreamCb(
 }
 
 
-PaError PulseAudioStartStreamCb(
+PaError PaPulseAudio_StartStreamCb(
     PaStream * s
 )
 {
     PaError result = paNoError;
-    PaPulseAudioStream *stream = (PaPulseAudioStream *) s;
+    PaPulseAudio_Stream *stream = (PaPulseAudio_Stream *) s;
     int streamStarted = 0;      /* So we can know whether we need to take the stream down */
-    PaPulseAudioHostApiRepresentation *l_ptrPulseAudioHostApi = stream->hostapi;
+    PaPulseAudio_HostApiRepresentation *l_ptrPulseAudioHostApi = stream->hostapi;
     const char *l_strName = NULL;
     pa_operation *l_ptrOperation = NULL;
 
@@ -411,7 +411,7 @@ PaError PulseAudioStartStreamCb(
                                        PA_STREAM_NO_REMAP_CHANNELS, NULL, NULL);
 
             pa_stream_set_underflow_callback(stream->outStream,
-                                             PulseAudioStreamUnderflowCb, stream);
+                                             PaPulseAudio_StreamUnderflowCb, stream);
 
             l_strName = NULL;
         }
@@ -439,7 +439,7 @@ PaError PulseAudioStartStreamCb(
                                  PA_STREAM_NO_REMIX_CHANNELS |
                                  PA_STREAM_NO_REMAP_CHANNELS);
         pa_stream_set_underflow_callback(stream->inStream,
-                                         PulseAudioStreamUnderflowCb, stream);
+                                         PaPulseAudio_StreamUnderflowCb, stream);
     }
 
     pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
@@ -509,12 +509,12 @@ PaError PulseAudioStartStreamCb(
 }
 
 PaError RealStop(
-    PaPulseAudioStream * stream,
+    PaPulseAudio_Stream * stream,
     int abort
 )
 {
     PaError result = paNoError;
-    PaPulseAudioHostApiRepresentation *l_ptrPulseAudioHostApi = stream->hostapi;
+    PaPulseAudio_HostApiRepresentation *l_ptrPulseAudioHostApi = stream->hostapi;
     pa_operation *l_ptrOperation = NULL;
 
     pa_threaded_mainloop_lock(l_ptrPulseAudioHostApi->mainloop);
@@ -556,17 +556,17 @@ PaError RealStop(
     return result;
 }
 
-PaError PulseAudioStopStreamCb(
+PaError PaPulseAudio_StopStreamCb(
     PaStream * s
 )
 {
-    return RealStop((PaPulseAudioStream *) s, 0);
+    return RealStop((PaPulseAudio_Stream *) s, 0);
 }
 
 
-PaError PulseAudioAbortStreamCb(
+PaError PaPulseAudio_AbortStreamCb(
     PaStream * s
 )
 {
-    return RealStop((PaPulseAudioStream *) s, 1);
+    return RealStop((PaPulseAudio_Stream *) s, 1);
 }

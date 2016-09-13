@@ -68,25 +68,25 @@ extern "C"
 #endif                          /* __cplusplus */
 
 
-    PaError PulseAudioCloseStreamCb(
+    PaError PaPulseAudio_CloseStreamCb(
     PaStream * stream
     );
-    PaError PulseAudioStartStreamCb(
+    PaError PaPulseAudio_StartStreamCb(
     PaStream * stream
     );
-    PaError PulseAudioStopStreamCb(
+    PaError PaPulseAudio_StopStreamCb(
     PaStream * stream
     );
-    PaError PulseAudioAbortStreamCb(
+    PaError PaPulseAudio_AbortStreamCb(
     PaStream * stream
     );
 
-    void PulseAudioStreamReadCb(
+    void PaPulseAudio_StreamReadCb(
     pa_stream * s,
     size_t length,
     void *userdata
     );
-    void PulseAudioStreamWriteCb(
+    void PaPulseAudio_StreamWriteCb(
     pa_stream * s,
     size_t length,
     void *userdata
