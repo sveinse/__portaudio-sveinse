@@ -281,6 +281,8 @@ PaError PaPulseAudio_CloseStreamCb(
     PaPulseAudio_Stream *stream = (PaPulseAudio_Stream *) s;
     PaPulseAudio_HostApiRepresentation *l_ptrPulseAudioHostApi = stream->hostapi;
     pa_operation *l_ptrOperation = NULL;
+    int l_iLoop = 0;
+    int l_iError = 0;
 
     if (stream->outStream != NULL && pa_stream_get_state(stream->outStream) == PA_STREAM_READY)
     {
@@ -294,16 +296,6 @@ PaError PaPulseAudio_CloseStreamCb(
         pa_stream_disconnect(stream->outStream);
 
         pa_threaded_mainloop_unlock(stream->mainloop);
-        while (pa_stream_get_state(stream->outStream) != PA_STREAM_TERMINATED)
-        {
-            usleep(100);
-        }
-
-        pa_stream_unref(stream->outStream);
-        stream->outStream = NULL;
-
-        PaUtil_FreeMemory(stream->outBuffer);
-        stream->outBuffer = NULL;
     }
 
     if (stream->inStream != NULL && pa_stream_get_state(stream->inStream) == PA_STREAM_READY)
@@ -316,18 +308,40 @@ PaError PaPulseAudio_CloseStreamCb(
         pa_stream_disconnect(stream->inStream);
 
         pa_threaded_mainloop_unlock(stream->mainloop);
-        while (pa_stream_get_state(stream->inStream) != PA_STREAM_TERMINATED)
-        {
-            usleep(100);
-        }
 
-        pa_stream_unref(stream->inStream);
-        stream->inStream = NULL;
-
-        PaUtil_FreeMemory(stream->inBuffer);
-        stream->inBuffer = NULL;
     }
 
+    /* Wait for termination for both */
+    while(!l_iLoop)
+    {
+        if (stream->inStream != NULL && pa_stream_get_state(stream->inStream) == PA_STREAM_TERMINATED)
+        {
+            pa_stream_unref(stream->inStream);
+            stream->inStream = NULL;
+
+            PaUtil_FreeMemory(stream->inBuffer);
+            stream->inBuffer = NULL;
+
+        }
+
+        if (stream->outStream != NULL && pa_stream_get_state(stream->outStream) == PA_STREAM_TERMINATED)
+        {
+            pa_stream_unref(stream->outStream);
+            stream->outStream = NULL;
+
+            PaUtil_FreeMemory(stream->outBuffer);
+            stream->outBuffer = NULL;
+        }
+        
+        if((stream->outStream == NULL && stream->inStream == NULL) || l_iError >= 5000)
+        {
+              l_iLoop = 1;
+        }
+        
+        l_iError ++;
+        usleep(100);
+    }
+    
     PaUtil_TerminateBufferProcessor(&stream->bufferProcessor);
     PaUtil_TerminateStreamRepresentation(&stream->streamRepresentation);
     PaUtil_FreeMemory(stream);
