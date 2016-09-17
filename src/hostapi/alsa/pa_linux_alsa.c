@@ -3872,8 +3872,7 @@ static PaError PaAlsaStream_WaitForFrames( PaAlsaStream *self, unsigned long *fr
                 xrun = 1; /* try recovering device */
 
                 PA_DEBUG(( "%s: poll timed out\n", __FUNCTION__, timeouts ));
-                result = paTimedOut;
-                goto end;/*PA_ENSURE( paTimedOut );*/
+                PA_ENSURE( paTimedOut );
             }
         }
         else if( pollResults > 0 )
