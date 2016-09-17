@@ -3847,8 +3847,6 @@ static PaError PaAlsaStream_WaitForFrames( PaAlsaStream *self, unsigned long *fr
                 continue;
             }
 
-            result = paInternalError;
-
             /* TODO: Add macro for checking system calls */
             PA_ENSURE( paInternalError );
         }
