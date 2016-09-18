@@ -1193,6 +1193,9 @@ static PaDeviceConnectionId MakeDeviceConnectionId( PaUtilHostApiRepresentation 
         for( int i = 0; i < hostApi->info.deviceCount; ++i )
         {
             PaAlsaDeviceInfo* alsaDevInfo = (PaAlsaDeviceInfo*)hostApi->deviceInfos[i];
+
+            // the long name of a card is unique per system as it contains the physical
+            // path to the device; it matches the second line of data from /proc/asound/cards
             if( strcmp( alsaDevInfo->alsaLongCardName, deviceHwInfo->alsaLongCardName ) == 0
                     && strcmp( alsaDevInfo->alsaName, deviceHwInfo->alsaName ) == 0)
             {
