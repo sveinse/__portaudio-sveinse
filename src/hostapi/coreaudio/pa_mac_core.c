@@ -97,14 +97,17 @@ static PaError DisposeDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, v
 typedef struct PaMacCoreScanResults
 {
 	long devCount;
+	
+	/* A contiguous array of device data for one scan. */
+	PaMacCoreDeviceInfo *macDeviceInfos;
 
+	/* This look-up table is used to fill PaHostApiInfo->deviceInfos. */
     PaDeviceInfo       **deviceInfos;
-    PaMacCoreDeviceInfo *macDeviceInfos;
+	
+	/* HOST-LOCAL default I/O device indices. */
     PaDeviceIndex        defaultInputDevice;
     PaDeviceIndex        defaultOutputDevice;
-
-    AudioDeviceID defaultInputCoreAudioDeviceID;
-    AudioDeviceID defaultOutputCoreAudioDeviceID;
+	
 } PaMacCoreScanResults;
 
 /*
@@ -192,8 +195,6 @@ static void InitMacCoreScanResults(PaMacCoreScanResults *scanResults)
 	/* We don't initially know about any default devices... */
 	scanResults->defaultInputDevice  = paNoDevice;
 	scanResults->defaultOutputDevice = paNoDevice;
-	scanResults->defaultInputCoreAudioDeviceID  = kAudioDeviceUnknown;
-	scanResults->defaultOutputCoreAudioDeviceID = kAudioDeviceUnknown;
 }
 
 /*
@@ -421,113 +422,6 @@ static PaError OpenAndSetupOneAudioUnit(
 /* for setting errors. */
 #define PA_AUHAL_SET_LAST_HOST_ERROR( errorCode, errorText ) \
     PaUtil_SetLastHostErrorInfo( paCoreAudio, errorCode, errorText )
-
-/*
-	This function scans for the current device list during initialization or refresh.
-*/
-static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResultsOut, int* count)
-{
-    UInt32         deviceIdListSize = 0;
-	AudioDeviceID *deviceIDList     = NULL;
-    UInt32 sizeOfAudioDeviceID = sizeof(AudioDeviceID);
-    PaMacCoreScanResults *scanResults = NULL;
-
-    VVDBUG(("gatherDeviceInfo()\n"));
-    /* -- figure out how many devices there are -- */
-    AudioHardwareGetPropertyInfo( kAudioHardwarePropertyDevices,
-                                  &deviceIdListSize,
-                                  NULL );
-    *count = (deviceIdListSize / sizeof(AudioDeviceID));
-
-    VDBUG( ( "Found %ld device(s).\n", *count ) );
-
-    if(*count == 0) return paNoError;
-
-    /*
-		Allocate and set up the scan results structure.
-    */
-	scanResults = AllocateMacCoreScanResults(auhalHostApi, *count);
-	if( !scanResults ) return paInsufficientMemory;
-	
-	InitMacCoreScanResults(scanResults);
-
-    /*
-		Copy the device ID list to the DeviceInfo buffer, then shuffle IDs into coreAudioDeviceID fields.
-			We use the DeviceInfo buffer oddly here to avoid a temporary allocation.
-			Note that this might have issues with strict aliasing...
-    */
-	{
-		int i;
-		
-		deviceIDList = (AudioDeviceID *) alloca(deviceIdListSize);
-
-		AudioHardwareGetProperty( kAudioHardwarePropertyDevices,
-									  &deviceIdListSize,
-									  deviceIDList );
-#ifdef MAC_CORE_VERBOSE_DEBUG
-		for( i=0; i<scanResults->devCount; ++i )
-			printf( "Device %d\t: %ld\n", i, deviceIDList[i] );
-#endif
-
-		/* Copy device ID list into macDeviceInfos.  Copy pointers info deviceInfos. */
-		for (i = 0; i < scanResults->devCount; ++i)
-		{
-			scanResults->macDeviceInfos[i].coreAudioDeviceID = deviceIDList[i];
-			scanResults->deviceInfos[i] = &scanResults->macDeviceInfos[i].inheritedDeviceInfo;
-		}
-	}
-
-	/*
-		Determine the default device.  On failure, use the first available device.
-	*/
-    {
-    	if( 0 != AudioHardwareGetProperty(kAudioHardwarePropertyDefaultInputDevice,
-						 &sizeOfAudioDeviceID,
-						 &scanResults->defaultInputCoreAudioDeviceID) )
-		{
-			int i;
-			scanResults->defaultInputCoreAudioDeviceID = kAudioDeviceUnknown;
-			VDBUG(("Failed to get default input device from OS."));
-			VDBUG((" I will substitute the first available input Device."));
-
-			for( i=0; i< scanResults->devCount; ++i )
-			{
-				PaDeviceInfo *devInfo = &scanResults->macDeviceInfos[i].inheritedDeviceInfo;
-				if( 0 != GetChannelInfo( auhalHostApi, devInfo,
-									   scanResults->macDeviceInfos[i].coreAudioDeviceID, TRUE ) )
-				 if( devInfo->maxInputChannels ) {
-					scanResults->defaultInputCoreAudioDeviceID = scanResults->macDeviceInfos[i].coreAudioDeviceID;
-					break;
-				 }
-			}
-		}
-		if( 0 != AudioHardwareGetProperty(kAudioHardwarePropertyDefaultOutputDevice,
-						 &sizeOfAudioDeviceID,
-						 &scanResults->defaultOutputCoreAudioDeviceID) )
-		{
-			int i;
-			scanResults->defaultOutputCoreAudioDeviceID  = kAudioDeviceUnknown;
-			VDBUG(("Failed to get default output device from OS."));
-			VDBUG((" I will substitute the first available output Device."));
-			for( i=0; i<scanResults->devCount; ++i )
-			{
-				PaDeviceInfo *devInfo = &scanResults->macDeviceInfos[i].inheritedDeviceInfo;
-				if( 0 != GetChannelInfo( auhalHostApi, devInfo,
-									   scanResults->macDeviceInfos[i].coreAudioDeviceID, FALSE ) )
-				 if( devInfo->maxOutputChannels ) {
-					scanResults->defaultOutputCoreAudioDeviceID = scanResults->macDeviceInfos[i].coreAudioDeviceID;
-					break;
-				 }
-			}
-		}
-    }
-
-    VDBUG( ( "Default in : %ld\n", scanResults->defaultInputCoreAudioDeviceID ) );
-    VDBUG( ( "Default out: %ld\n", scanResults->defaultOutputCoreAudioDeviceID ) );
-
-    *scanResultsOut = scanResults;
-    return paNoError;
-}
 
 /* =================================================================================================== */
 /**
@@ -761,9 +655,10 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
 
     VVDBUG(("InitializeDeviceInfo(): macCoreDeviceId=%ld\n", macCoreDeviceId));
 
-	// Clear and set up the structure...
+	/* Clear the structure. */
     memset(macDeviceInfo, 0, sizeof(PaMacCoreDeviceInfo));
 
+	/* Assign basic fields */
     deviceInfo->structVersion = 3;
     deviceInfo->hostApi = hostApiIndex;
 	macDeviceInfo->coreAudioDeviceID = coreAudioDeviceID;
@@ -830,66 +725,144 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
     void **scanResultsOut, int *newDeviceCount)
 {
     PaMacAUHAL* auhalHostApi = (PaMacAUHAL*)hostApi;
-    PaError result = paNoError;
-    int i = 0;
-    PaMacCoreScanResults* scanResults = NULL;
-    int acceptCount = 0;
-
-    /* get the info we need about the devices */
-    result = gatherDeviceInfo( auhalHostApi, (void**) &scanResults, newDeviceCount );
-
-    if( result != paNoError )
-        return result;
-
-    if( scanResults->devCount > 0 )
-    {
-       for( i=0; i < scanResults->devCount; ++i )
-        {
-            int err;
-            err = InitializeDeviceInfo( auhalHostApi, &scanResults->macDeviceInfos[i],
-                                      scanResults->macDeviceInfos[i].coreAudioDeviceID,
-                                      hostApiIndex );
-            if (err == paNoError)
-            {
-            	/*
-					Set the default device indices.
-            	*/
-                if (scanResults->macDeviceInfos[i].coreAudioDeviceID == scanResults->defaultInputCoreAudioDeviceID)
-                {
-                    scanResults->defaultInputDevice = acceptCount;
-                }
-                if (scanResults->macDeviceInfos[i].coreAudioDeviceID == scanResults->defaultOutputCoreAudioDeviceID)
-                {
-                    scanResults->defaultOutputDevice = acceptCount;
-                }
-
-                ++acceptCount;
-            }
-            else
-            {
-                /*
-					On error, shift the device list down and reduce its size.
-					(We act like the problem device does not exist!)
-				*/
-                --scanResults->devCount;
-
-                int j;
-                for( j=i; j<scanResults->devCount; ++j )
-                   scanResults->macDeviceInfos[j] = scanResults->macDeviceInfos[j+1];
-                --i;
-            }
-        }
-    }
+    int i = 0; /* Keep this signed. */
 	
-	//Sanity check to safeguard against logic errors.
-	if (acceptCount != scanResults->devCount)
+    PaMacCoreScanResults* scanResults = NULL;
+	
+    long           deviceIDCount = 0;
+	AudioDeviceID *deviceIDList  = NULL;
+	AudioDeviceID  defaultInputCoreAudioDeviceID, defaultOutputCoreAudioDeviceID;
+	
+	VVDBUG(("ScanDeviceInfos()\n"));
+	
+	/*
+		Query audio device list and default I/O devices, all at once.
+			I'm worried about race conditions here...  --Evan
+	*/
 	{
-		FreeMacCoreScanResults( auhalHostApi, scanResults );
-		return paUnanticipatedHostError;
+		OSStatus osErr;
+		UInt32 deviceIdListSize = 0;
+		UInt32 sizeOfAudioDeviceID = sizeof(AudioDeviceID);
+		
+		
+		/* Get the size of the device list (in bytes) */
+		osErr = AudioHardwareGetPropertyInfo( kAudioHardwarePropertyDevices,
+			&deviceIdListSize, NULL );
+		
+		if (osErr != noErr) return paUnanticipatedHostError;
+		
+		
+		/* Store the device list in an alloca() buffer.  This is well-supported on Mac. */
+		deviceIDList = (AudioDeviceID *) alloca(deviceIdListSize);
+		
+		osErr = AudioHardwareGetProperty( kAudioHardwarePropertyDevices,
+			&deviceIdListSize, deviceIDList );
+		
+		if (osErr != noErr) return paUnanticipatedHostError;
+		
+		
+		/* Query default I/O devices.  Tolerate failure here.  */
+		osErr = AudioHardwareGetProperty(kAudioHardwarePropertyDefaultInputDevice,
+			&sizeOfAudioDeviceID, &defaultInputCoreAudioDeviceID);
+		
+		if (osErr != noErr) defaultInputCoreAudioDeviceID = kAudioDeviceUnknown;
+		
+		AudioHardwareGetProperty(kAudioHardwarePropertyDefaultOutputDevice,
+			&sizeOfAudioDeviceID, &defaultOutputCoreAudioDeviceID);
+		
+		if (osErr != noErr) defaultOutputCoreAudioDeviceID = kAudioDeviceUnknown;
+		
+		
+		/* Note the number of devices reported. */
+		deviceIDCount = (deviceIdListSize / sizeof(AudioDeviceID));
+		
+#ifdef MAC_CORE_VERBOSE_DEBUG
+		VDBUG( ( "Found %ld device(s)...\n", *deviceIDCount ) );
+		for( i=0; i<scanResults->devCount; ++i )
+			VDBUG( ( "  Device #%d\t: %ld\n", i, deviceIDList[i] ) );
+#endif
 	}
 	
+	/*
+		Allocate and initialize the scan results structure.
+	*/
+	scanResults = AllocateMacCoreScanResults(auhalHostApi, deviceIDCount);
+	
+	if( !scanResults ) return paInsufficientMemory;
+	
+	InitMacCoreScanResults(scanResults);
+	
+	/*
+		Initialize audio device descriptions...
+	*/
+	for( i=0; i < scanResults->devCount; ++i )
+	{
+		PaError err;
+		err = InitializeDeviceInfo( auhalHostApi, &scanResults->macDeviceInfos[i],
+									deviceIDList[i], hostApiIndex );
+		
+		/* If InitializeDeviceInfo fails, drop the problem device from the list. */
+		if (err != paNoError)
+		{
+			--scanResults->devCount;
+			--i;
+			continue;
+		}
+		
+		/*
+			Check if this is the default input or output.
+		*/
+		if (scanResults->macDeviceInfos[i].coreAudioDeviceID == defaultInputCoreAudioDeviceID)
+		{
+			scanResults->defaultInputDevice = i;
+		}
+		if (scanResults->macDeviceInfos[i].coreAudioDeviceID == defaultOutputCoreAudioDeviceID)
+		{
+			scanResults->defaultOutputDevice = i;
+		}
+	}
+	
+	
+	/*
+		If the default input or output was not found, attempt to find a substitute.
+			(Is this actually useful?  It's a holdover from libjitsi.  --Evan)
+	*/
+	if (scanResults->defaultInputDevice == paNoDevice)
+	{
+		VDBUG(("Failed to get default input device from OS."));
+		VDBUG((" I will substitute the first available input Device."));
+		
+		for( i=0; i < scanResults->devCount; ++i )
+		{
+			if (scanResults->deviceInfos[i]->maxInputChannels)
+			{
+				scanResults->defaultInputDevice = i;
+				break;
+			}
+		}
+	}
+	
+	if (scanResults->defaultOutputDevice == paNoDevice)
+	{
+		VDBUG(("Failed to get default output device from OS."));
+		VDBUG((" I will substitute the first available output Device."));
+		
+		for( i=0; i < scanResults->devCount; ++i )
+		{
+			if (scanResults->deviceInfos[i]->maxOutputChannels)
+			{
+				scanResults->defaultOutputDevice = i;
+				break;
+			}
+		}
+	}
+	
+	
+	VDBUG( ( "Default in : Device #%ld\n", scanResults->defaultInputDevice  ) );
+    VDBUG( ( "Default out: Device #%ld\n", scanResults->defaultOutputDevice ) );
+	
 	*scanResultsOut = scanResults;
-    *newDeviceCount = acceptCount;
+    *newDeviceCount = scanResults->devCount;
 
     return paNoError;
 }
