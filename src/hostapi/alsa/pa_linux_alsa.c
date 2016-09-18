@@ -719,7 +719,6 @@ static PaError IsStreamStopped( PaStream *s );
 static PaError IsStreamActive( PaStream *stream );
 static PaTime GetStreamTime( PaStream *stream );
 static double GetStreamCpuLoad( PaStream* stream );
-static PaError BuildDeviceList( PaAlsaHostApiRepresentation *hostApi, void** scanResults, int* deviceCount );
 static int SetApproximateSampleRate( snd_pcm_t *pcm, snd_pcm_hw_params_t *hwParams, double sampleRate );
 static int GetExactSampleRate( snd_pcm_hw_params_t *hwParams, double *sampleRate );
 static PaUint32 PaAlsaVersionNum(void);
@@ -1292,9 +1291,10 @@ end:
 }
 
 /* Build PaDeviceInfo list, ignore devices for which we cannot determine capabilities (possibly busy, sigh) */
-static PaError BuildDeviceList( PaAlsaHostApiRepresentation *alsaApi, void** scanResults, int* count)
+static PaError ScanDeviceInfos( struct PaUtilHostApiRepresentation *hostApi, PaHostApiIndex hostApiIndex,
+        void **scanResults, int *newDeviceCount )
 {
-    PaUtilHostApiRepresentation *baseApi = &alsaApi->baseHostApiRep;
+    PaAlsaHostApiRepresentation *alsaApi = (PaAlsaHostApiRepresentation*)hostApi;
     PaAlsaScanDeviceInfosResults *outArgument = NULL;
     PaAlsaDeviceInfo *deviceInfoArray;
     int cardIdx = -1, devIdx = 0;
@@ -1313,6 +1313,7 @@ static PaError BuildDeviceList( PaAlsaHostApiRepresentation *alsaApi, void** sca
     PaTime startTime = PaUtil_GetTime();
 #endif
     PaAlsaScanDeviceInfosResults* out = NULL;
+
 
     if( getenv( "PA_ALSA_INITIALIZE_BLOCK" ) && atoi( getenv( "PA_ALSA_INITIALIZE_BLOCK" ) ) )
         blocking = 0;
@@ -1546,7 +1547,7 @@ static PaError BuildDeviceList( PaAlsaHostApiRepresentation *alsaApi, void** sca
 
     out->deviceCount = devIdx;   /* Number of successfully queried devices */
     *scanResults = out;
-    *count = out->deviceCount;
+    *newDeviceCount = out->deviceCount;
 
 #ifdef PA_ENABLE_DEBUG_OUTPUT
     PA_DEBUG(( "%s: Building device list took %f seconds\n", __FUNCTION__, PaUtil_GetTime() - startTime ));
@@ -4704,19 +4705,6 @@ PaError PaAlsa_SetRetriesBusy( int retries )
 {
     busyRetries_ = retries;
     return paNoError;
-}
-
-static PaError ScanDeviceInfos( struct PaUtilHostApiRepresentation *hostApi, PaHostApiIndex hostApiIndex,
-        void **scanResults, int *newDeviceCount )
-{
-    PaAlsaHostApiRepresentation* alsaHostApi = (PaAlsaHostApiRepresentation*)hostApi;
-    PaError result = paNoError;
-    PA_ENSURE( BuildDeviceList( alsaHostApi, scanResults, newDeviceCount ) );
-
-    return paNoError;
-
-error:
-    return result;
 }
 
 static PaError CommitDeviceInfos( struct PaUtilHostApiRepresentation *hostApi, PaHostApiIndex index,
