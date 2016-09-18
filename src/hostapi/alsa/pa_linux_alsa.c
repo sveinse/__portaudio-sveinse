@@ -3345,12 +3345,10 @@ static PaError PaAlsaStream_HandleXrun( PaAlsaStream *self )
     snd_timestamp_t t;
     int restartAlsa = 0; /* do not restart Alsa by default */
 
-    alsa_snd_pcm_status_alloca( &st );
-
     if( self->playback.pcm )
     {
-        alsa_snd_pcm_status( self->playback.pcm, st );
-        if( alsa_snd_pcm_status_get_state( st ) == SND_PCM_STATE_XRUN )
+        snd_pcm_state_t state = alsa_snd_pcm_state( self->playback.pcm );
+        if(state  == SND_PCM_STATE_XRUN )
         {
             alsa_snd_pcm_status_get_trigger_tstamp( st, &t );
             self->underrun = now * 1000 - ( (PaTime)t.tv_sec * 1000 + (PaTime)t.tv_usec / 1000 );
@@ -3366,11 +3364,15 @@ static PaError PaAlsaStream_HandleXrun( PaAlsaStream *self )
             else
                 ++ restartAlsa; /* always restart MMAPed device */
         }
+        else if( state == SND_PCM_STATE_SUSPENDED || state == SND_PCM_STATE_DISCONNECTED )
+        {
+            result = paDeviceUnavailable;
+        }
     }
     if( self->capture.pcm )
     {
-        alsa_snd_pcm_status( self->capture.pcm, st );
-        if( alsa_snd_pcm_status_get_state( st ) == SND_PCM_STATE_XRUN )
+        snd_pcm_state_t state = alsa_snd_pcm_state( self->playback.pcm );
+        if( state == SND_PCM_STATE_XRUN )
         {
             alsa_snd_pcm_status_get_trigger_tstamp( st, &t );
             self->overrun = now * 1000 - ((PaTime) t.tv_sec * 1000 + (PaTime) t.tv_usec / 1000);
@@ -3385,6 +3387,10 @@ static PaError PaAlsaStream_HandleXrun( PaAlsaStream *self )
             }
             else
                 ++ restartAlsa; /* always restart MMAPed device */
+        }
+        else if( state == SND_PCM_STATE_SUSPENDED || state == SND_PCM_STATE_DISCONNECTED )
+        {
+            result = paDeviceUnavailable;
         }
     }
 
@@ -4002,7 +4008,7 @@ error:
     if( xrun )
     {
         /* Recover from the xrun state */
-        PA_ENSURE( PaAlsaStream_HandleXrun( self ) );
+        result = PaAlsaStream_HandleXrun( self );
         *framesAvail = 0;
     }
     else
@@ -4010,7 +4016,10 @@ error:
         if( 0 != *framesAvail )
         {
             /* If we're reporting frames eligible for processing, one of the handles better be ready */
-            PA_UNLESS( self->capture.ready || self->playback.ready, paInternalError );
+            if( !( self->capture.ready || self->playback.ready ) )
+            {
+                result = paInternalError;
+            }
         }
     }
     *xrunOccurred = xrun;
