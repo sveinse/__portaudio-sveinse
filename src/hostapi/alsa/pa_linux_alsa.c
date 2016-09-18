@@ -730,6 +730,8 @@ static PaError CommitDeviceInfos( struct PaUtilHostApiRepresentation *hostApi, P
         void *deviceInfos, int deviceCount );
 static PaError DisposeDeviceInfos( struct PaUtilHostApiRepresentation *hostApi, void *deviceInfos,
         int deviceCount );
+static void FreeDeviceInfos( PaUtilAllocationGroup *allocations, PaDeviceInfo **deviceInfos,
+        int deviceCount );
 
 /* Callback prototypes */
 static void *CallbackThreadFunc( void *userData );
@@ -1196,8 +1198,10 @@ static PaDeviceConnectionId MakeDeviceConnectionId( PaUtilHostApiRepresentation 
 
             // the long name of a card is unique per system as it contains the physical
             // path to the device; it matches the second line of data from /proc/asound/cards
+            //
+            // for pcm plugins it is a constant string as there is no more specific name
             if( strcmp( alsaDevInfo->alsaLongCardName, deviceHwInfo->alsaLongCardName ) == 0
-                    && strcmp( alsaDevInfo->alsaName, deviceHwInfo->alsaName ) == 0)
+                    && strcmp( alsaDevInfo->alsaName, deviceHwInfo->alsaName ) == 0 )
             {
                 return alsaDevInfo->baseDeviceInfo.connectionId;
             }
@@ -1428,7 +1432,7 @@ static PaError BuildDeviceList( PaAlsaHostApiRepresentation *alsaApi, void** sca
             const char *tpStr = "unknown", *idStr = NULL;
             int err = 0;
 
-            char *alsaDeviceName, *deviceName;
+            char *alsaDeviceName, *alsaLongName, *deviceName;
             const HwDevInfo *predefined = NULL;
             snd_config_t *n = alsa_snd_config_iterator_entry( i ), * tp = NULL;;
 
@@ -1454,6 +1458,9 @@ static PaError BuildDeviceList( PaAlsaHostApiRepresentation *alsaApi, void** sca
             PA_UNLESS( alsaDeviceName = (char*)PaUtil_GroupAllocateMemory( alsaApi->allocations,
                                                             strlen(idStr) + 6 ), paInsufficientMemory );
             strcpy( alsaDeviceName, idStr );
+            PA_UNLESS( alsaLongName = (char*)PaUtil_GroupAllocateMemory( alsaApi->allocations,
+                                                            strlen("snd-pcm-plugin") + 1 ), paInsufficientMemory );
+            strcpy( alsaLongName, "snd-pcm-plugin" );
             PA_UNLESS( deviceName = (char*)PaUtil_GroupAllocateMemory( alsaApi->allocations,
                                                             strlen(idStr) + 1 ), paInsufficientMemory );
             strcpy( deviceName, idStr );
@@ -1469,7 +1476,7 @@ static PaError BuildDeviceList( PaAlsaHostApiRepresentation *alsaApi, void** sca
             predefined = FindDeviceName( alsaDeviceName );
 
             hwDevInfos[numDeviceNames - 1].alsaName = alsaDeviceName;
-            hwDevInfos[numDeviceNames - 1].alsaLongCardName = "snd-pcm-plugin";
+            hwDevInfos[numDeviceNames - 1].alsaLongCardName = alsaLongName;
             hwDevInfos[numDeviceNames - 1].name     = deviceName;
             hwDevInfos[numDeviceNames - 1].isPlug   = 1;
 
@@ -1549,8 +1556,12 @@ end:
     return result;
 
 error:
-    /* No particular action */
-    goto end;
+    if( out )
+    {
+        FreeDeviceInfos( alsaApi->allocations, out->deviceInfos, devIdx );
+    }
+
+    return result;
 }
 
 /* Check against known device capabilities */
@@ -4721,9 +4732,7 @@ static PaError CommitDeviceInfos( struct PaUtilHostApiRepresentation *hostApi, P
     /* Free any old memory which might be in the device info */
     if( hostApi->deviceInfos )
     {
-        /* all device info structs are allocated in a block so we can destroy them here */
-        PaUtil_GroupFreeMemory( alsaHostApi->allocations, hostApi->deviceInfos[0] );
-        PaUtil_GroupFreeMemory( alsaHostApi->allocations, hostApi->deviceInfos );
+        FreeDeviceInfos( alsaHostApi->allocations, hostApi->deviceInfos, hostApi->info.deviceCount );
         hostApi->deviceInfos = NULL;
     }
 
@@ -4746,6 +4755,29 @@ static PaError CommitDeviceInfos( struct PaUtilHostApiRepresentation *hostApi, P
     return result;
 }
 
+static void FreeDeviceInfos( PaUtilAllocationGroup *allocations,
+                             PaDeviceInfo **deviceInfos, int deviceCount )
+{
+    if( deviceInfos )
+    {
+        if( deviceInfos[0] )
+        {
+            int i;
+            for( i = 0; i < deviceCount; ++i )
+            {
+                PaAlsaDeviceInfo *alsaDeviceInfo = (PaAlsaDeviceInfo*)deviceInfos[ i ];
+                PaUtil_GroupFreeMemory( allocations, alsaDeviceInfo->alsaName );
+                PaUtil_GroupFreeMemory( allocations, alsaDeviceInfo->alsaLongCardName );
+            }
+
+            /* all device info structs are allocated in a block so we can destroy them like this */
+            PaUtil_GroupFreeMemory( allocations, deviceInfos[0] );
+        }
+
+        PaUtil_GroupFreeMemory( allocations, deviceInfos );
+    }
+}
+
 static PaError DisposeDeviceInfos( struct PaUtilHostApiRepresentation *hostApi, void *scanResults, int deviceCount )
 {
     PaAlsaHostApiRepresentation *alsaHostApi = (PaAlsaHostApiRepresentation*)hostApi;
@@ -4755,9 +4787,7 @@ static PaError DisposeDeviceInfos( struct PaUtilHostApiRepresentation *hostApi, 
         PaAlsaScanDeviceInfosResults *scanDeviceInfosResults = (PaAlsaScanDeviceInfosResults*)scanResults;
         if( scanDeviceInfosResults->deviceInfos )
         {
-            /* all device info structs are allocated in a block so we can destroy them here */
-            PaUtil_GroupFreeMemory( alsaHostApi->allocations, scanDeviceInfosResults->deviceInfos[0] );
-            PaUtil_GroupFreeMemory( alsaHostApi->allocations, scanDeviceInfosResults->deviceInfos );
+            FreeDeviceInfos( alsaHostApi->allocations, scanDeviceInfosResults->deviceInfos, deviceCount );
         }
 
         PaUtil_GroupFreeMemory( alsaHostApi->allocations, scanDeviceInfosResults );
