@@ -334,36 +334,6 @@ static PaError OpenAndSetupOneAudioUnit(
     PaUtil_SetLastHostErrorInfo( paCoreAudio, errorCode, errorText )
 
 /*
- * Callback called when starting or stopping a stream.
- */
-static void startStopCallback(
-   void *               inRefCon,
-   AudioUnit            ci,
-   AudioUnitPropertyID  inID,
-   AudioUnitScope       inScope,
-   AudioUnitElement     inElement )
-{
-   PaMacCoreStream *stream = (PaMacCoreStream *) inRefCon;
-   UInt32 isRunning;
-   UInt32 size = sizeof( isRunning );
-   OSStatus err;
-   err = AudioUnitGetProperty( ci, kAudioOutputUnitProperty_IsRunning, inScope, inElement, &isRunning, &size );
-   assert( !err );
-   if( err )
-      isRunning = false; //it's very unclear what to do in case of error here. There's no real way to notify the user, and crashing seems unreasonable.
-   if( isRunning )
-      return; //We are only interested in when we are stopping
-   // -- if we are using 2 I/O units, we only need one notification!
-   if( stream->inputUnit && stream->outputUnit && stream->inputUnit != stream->outputUnit && ci == stream->inputUnit )
-      return;
-   PaStreamFinishedCallback *sfc = stream->streamRepresentation.streamFinishedCallback;
-   if( stream->state == STOPPING )
-      stream->state = STOPPED ;
-   if( sfc )
-      sfc( stream->streamRepresentation.userData );
-}
-
-/*
 	This function scans for the current device list during initialization or refresh.
 */
 static PaError gatherDeviceInfo(PaMacAUHAL* auhalHostApi, void** scanResults, int* count)
@@ -787,6 +757,240 @@ error:
 	return err;
 }
 
+static void FreeMacCoreDeviceInfo(PaMacAUHAL *auhalHostApi, PaDeviceInfo **infos, int count)
+{
+	int i;
+	for (i = 0; i < count; ++i)
+	{
+		PaDeviceInfo        *info = infos[i];
+		if (info->name)
+			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (void*) info->name );
+	}
+	
+	PaUtil_GroupFreeMemory( auhalHostApi->allocations, infos );
+}
+
+
+static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHostApiIndex hostApiIndex,
+    void **scanResults, int *newDeviceCount)
+{
+    PaMacAUHAL* auhalHostApi = (PaMacAUHAL*)hostApi;
+    PaError result = paNoError;
+    int i = 0;
+    PaMacScanDeviceInfosResults* scanData = NULL;
+    int acceptCount = 0;
+
+    /* get the info we need about the devices */
+    result = gatherDeviceInfo( auhalHostApi, scanResults, newDeviceCount );
+
+    if( result != paNoError )
+        return result;
+
+    scanData = (PaMacScanDeviceInfosResults*)*scanResults;
+
+    if( scanData->devCount > 0 )
+    {
+       for( i=0; i < scanData->devCount; ++i )
+        {
+            int err;
+            err = InitializeDeviceInfo( auhalHostApi, &scanData->macDeviceInfos[i],
+                                      scanData->macDeviceInfos[i].coreAudioDeviceID,
+                                      hostApiIndex );
+            if (err == paNoError)
+            {
+            	/*
+					Set the default device indices.
+            	*/
+                if (scanData->macDeviceInfos[i].coreAudioDeviceID == scanData->defaultInputCoreAudioDeviceID)
+                {
+                    scanData->defaultInputDevice = acceptCount;
+                }
+                if (scanData->macDeviceInfos[i].coreAudioDeviceID == scanData->defaultOutputCoreAudioDeviceID)
+                {
+                    scanData->defaultOutputDevice = acceptCount;
+                }
+
+                ++acceptCount;
+            }
+            else
+            {
+                /*
+					On error, shift the device list down and reduce its size.
+					(We act like the problem device does not exist!)
+				*/
+                --scanData->devCount;
+
+                int j;
+                for( j=i; j<scanData->devCount; ++j )
+                   scanData->macDeviceInfos[j] = scanData->macDeviceInfos[j+1];
+                --i;
+            }
+        }
+    }
+	
+	//Sanity check to safeguard against logic errors.
+	if (acceptCount != scanData->devCount)
+	{
+		FreeMacCoreDeviceInfo( auhalHostApi, scanData->deviceInfos, auhalHostApi->devCount );
+		PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanData );
+		return paUnanticipatedHostError;
+	}
+	
+    *newDeviceCount = acceptCount;
+
+    return paNoError;
+}
+
+/*
+	Device-matching subroutine.  Returns 1 if matching, 0 otherwise.
+		Currently, only AudioDeviceID is considered.
+*/
+static bool MacCoreDevice_IsSame(
+	const PaMacCoreDeviceInfo *a, const PaMacCoreDeviceInfo *b)
+{
+	return (a->coreAudioDeviceID == b->coreAudioDeviceID);
+}
+
+/*
+	Find matching MacCoreDeviceInfo in a list.
+		Returns index on success or error code on failure:
+		-1:  No match
+		-2:  Multiple matches (ambiguous)
+*/
+static int MacCoreDevice_FindSingleMatch(
+	const PaMacCoreDeviceInfo *list, int count, const PaMacCoreDeviceInfo *device)
+{
+	int i = 0, match = -1, matchCount = 0;
+	for (i = 0; i < count; ++i)
+	{
+		if (MacCoreDevice_IsSame(device, &list[i]))
+		{
+			++matchCount;
+			match = i;
+		}
+	}
+	if (matchCount > 1) return -2;
+	return match;
+}
+
+/*
+	CommitDeviceInfos is an atomic non-failing operation.  Errors are not permissible!!
+*/
+static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHostApiIndex index,
+    void *scanResults, int deviceCount)
+{
+    PaMacAUHAL* auhalHostApi = (PaMacAUHAL*)hostApi;
+    PaError result = paNoError;
+	
+	PaMacScanDeviceInfosResults *scanData = ( PaMacScanDeviceInfosResults * ) scanResults;
+	
+	/*
+		Update connection IDs by correlating new deviceInfos (from scan) to existing ones.
+			Connections IDs are preserved when 1:1 matches are found, generated otherwise.
+	*/
+	{
+		int i, matchIndex;
+		
+		PaMacCoreDeviceInfo *deviceNew;
+		
+		for (i = 0; i < scanData->devCount; ++i)
+		{
+			deviceNew = &scanData->macDeviceInfos[i];
+			
+			// Search for a single matching device in the old list.
+			matchIndex = MacCoreDevice_FindSingleMatch(
+				auhalHostApi->macDeviceInfos, hostApi->info.deviceCount, deviceNew);
+			
+			// If a single
+			if (matchIndex >= 0)
+			{
+				PaMacCoreDeviceInfo *deviceOld = &auhalHostApi->macDeviceInfos[matchIndex];
+				
+				// Confirm that ONLY this new device matches the old one.
+				if (i == MacCoreDevice_FindSingleMatch(
+					scanData->macDeviceInfos, scanData->devCount, deviceOld))
+				{
+					// Preserve connection ID
+					deviceNew->inheritedDeviceInfo.connectionId =
+						deviceOld->inheritedDeviceInfo.connectionId;
+					
+					VVDBUG(("  ... Preserved ID %ld\n", (long) deviceNew->inheritedDeviceInfo.connectionId));
+				}
+				else
+				{
+					// If multiple new devices match the old one, fall through to "no match" code.
+					VVDBUG(("  WARNING: MULTIPLE NEW DEVICES MATCH OLD DEVICE\n"));
+					matchIndex = -1;
+				}
+			}
+			
+			
+			if (matchIndex < 0)
+			{
+				// No 1:1 match was found...
+				if (matchIndex == -2) VVDBUG(("  WARNING: MULTIPLE OLD DEVICES MATCH NEW DEVICE\n"));
+				
+				// Assign newly-generation connection ID
+				deviceNew->inheritedDeviceInfo.connectionId = PaUtil_MakeDeviceConnectionId();
+				
+				VVDBUG(("  ... Assigned new ID %ld\n", (long) deviceNew->inheritedDeviceInfo.connectionId));
+			}
+		}
+	}
+	
+	hostApi->info.deviceCount = 0;
+	hostApi->info.defaultInputDevice = paNoDevice;
+	hostApi->info.defaultOutputDevice = paNoDevice;
+
+    /* Free the old deviceInfos block.  (one block includes pointers and PaMacCoreDeviceInfos!) */
+    if( hostApi->deviceInfos )
+    {
+        FreeMacCoreDeviceInfo( auhalHostApi, hostApi->deviceInfos, auhalHostApi->devCount );
+        hostApi->deviceInfos = NULL;
+    }
+
+    if( scanResults != NULL )
+    {
+		if( deviceCount > 0 )
+        {
+            /* use the array allocated in ScanDeviceInfos() as our deviceInfos */
+            hostApi->deviceInfos = scanData->deviceInfos;
+            hostApi->info.defaultInputDevice = scanData->defaultInputDevice;
+            hostApi->info.defaultOutputDevice = scanData->defaultOutputDevice;
+            hostApi->info.deviceCount = deviceCount;
+			
+            auhalHostApi->macDeviceInfos = scanData->macDeviceInfos;
+            auhalHostApi->devCount = scanData->devCount;
+            //auhalHostApi->defaultIn = scanDeviceInfosResults->defaultInputDevice;
+            //auhalHostApi->defaultOut = scanDeviceInfosResults->defaultOutputDevice;
+        }
+    }
+	
+	PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanData );
+
+    return result;
+}
+
+static PaError DisposeDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, void *scanResults, int deviceCount)
+{
+    PaMacAUHAL *auhalHostApi = (PaMacAUHAL*)hostApi;
+
+    if( scanResults != NULL )
+    {
+        PaMacScanDeviceInfosResults *scanData = ( PaMacScanDeviceInfosResults * ) scanResults;
+        if( scanData->deviceInfos )
+        {
+            /* all device info structs are allocated in a block so we can destroy them here */
+			FreeMacCoreDeviceInfo( auhalHostApi, scanData->deviceInfos, scanData->devCount );
+        }
+
+        PaUtil_GroupFreeMemory(auhalHostApi->allocations, scanData );
+    }
+
+    return paNoError;
+}
+
+
 PaError PaMacCore_Initialize( PaUtilHostApiRepresentation **hostApi, PaHostApiIndex hostApiIndex )
 {
     PaError result = paNoError;
@@ -1195,6 +1399,37 @@ static void CleanupDevicePropertyListeners( PaMacCoreStream *stream, AudioDevice
 }
 
 /* ================================================================================= */
+
+/*
+ * Callback called when starting or stopping a stream.
+ */
+static void startStopCallback(
+   void *               inRefCon,
+   AudioUnit            ci,
+   AudioUnitPropertyID  inID,
+   AudioUnitScope       inScope,
+   AudioUnitElement     inElement )
+{
+   PaMacCoreStream *stream = (PaMacCoreStream *) inRefCon;
+   UInt32 isRunning;
+   UInt32 size = sizeof( isRunning );
+   OSStatus err;
+   err = AudioUnitGetProperty( ci, kAudioOutputUnitProperty_IsRunning, inScope, inElement, &isRunning, &size );
+   assert( !err );
+   if( err )
+      isRunning = false; //it's very unclear what to do in case of error here. There's no real way to notify the user, and crashing seems unreasonable.
+   if( isRunning )
+      return; //We are only interested in when we are stopping
+   // -- if we are using 2 I/O units, we only need one notification!
+   if( stream->inputUnit && stream->outputUnit && stream->inputUnit != stream->outputUnit && ci == stream->inputUnit )
+      return;
+   PaStreamFinishedCallback *sfc = stream->streamRepresentation.streamFinishedCallback;
+   if( stream->state == STOPPING )
+      stream->state = STOPPED ;
+   if( sfc )
+      sfc( stream->streamRepresentation.userData );
+}
+
 static PaError OpenAndSetupOneAudioUnit(
                                    const PaMacCoreStream *stream,
                                    const PaStreamParameters *inStreamParams,
@@ -2855,239 +3090,5 @@ static double GetStreamCpuLoad( PaStream* s )
     VVDBUG(("GetStreamCpuLoad()\n"));
 
     return PaUtil_GetCpuLoad( &stream->cpuLoadMeasurer );
-}
-
-
-static void FreeMacCoreDeviceInfo(PaMacAUHAL *auhalHostApi, PaDeviceInfo **infos, int count)
-{
-	int i;
-	for (i = 0; i < count; ++i)
-	{
-		PaDeviceInfo        *info = infos[i];
-		if (info->name)
-			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (void*) info->name );
-	}
-	
-	PaUtil_GroupFreeMemory( auhalHostApi->allocations, infos );
-}
-
-
-static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHostApiIndex hostApiIndex,
-    void **scanResults, int *newDeviceCount)
-{
-    PaMacAUHAL* auhalHostApi = (PaMacAUHAL*)hostApi;
-    PaError result = paNoError;
-    int i = 0;
-    PaMacScanDeviceInfosResults* scanData = NULL;
-    int acceptCount = 0;
-
-    /* get the info we need about the devices */
-    result = gatherDeviceInfo( auhalHostApi, scanResults, newDeviceCount );
-
-    if( result != paNoError )
-        return result;
-
-    scanData = (PaMacScanDeviceInfosResults*)*scanResults;
-
-    if( scanData->devCount > 0 )
-    {
-       for( i=0; i < scanData->devCount; ++i )
-        {
-            int err;
-            err = InitializeDeviceInfo( auhalHostApi, &scanData->macDeviceInfos[i],
-                                      scanData->macDeviceInfos[i].coreAudioDeviceID,
-                                      hostApiIndex );
-            if (err == paNoError)
-            {
-            	/*
-					Set the default device indices.
-            	*/
-                if (scanData->macDeviceInfos[i].coreAudioDeviceID == scanData->defaultInputCoreAudioDeviceID)
-                {
-                    scanData->defaultInputDevice = acceptCount;
-                }
-                if (scanData->macDeviceInfos[i].coreAudioDeviceID == scanData->defaultOutputCoreAudioDeviceID)
-                {
-                    scanData->defaultOutputDevice = acceptCount;
-                }
-
-                ++acceptCount;
-            }
-            else
-            {
-                /*
-					On error, shift the device list down and reduce its size.
-					(We act like the problem device does not exist!)
-				*/
-                --scanData->devCount;
-
-                int j;
-                for( j=i; j<scanData->devCount; ++j )
-                   scanData->macDeviceInfos[j] = scanData->macDeviceInfos[j+1];
-                --i;
-            }
-        }
-    }
-	
-	//Sanity check to safeguard against logic errors.
-	if (acceptCount != scanData->devCount)
-	{
-		FreeMacCoreDeviceInfo( auhalHostApi, scanData->deviceInfos, auhalHostApi->devCount );
-		PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanData );
-		return paUnanticipatedHostError;
-	}
-	
-    *newDeviceCount = acceptCount;
-
-    return paNoError;
-}
-
-/*
-	Device-matching subroutine.  Returns 1 if matching, 0 otherwise.
-		Currently, only AudioDeviceID is considered.
-*/
-static bool MacCoreDevice_IsSame(
-	const PaMacCoreDeviceInfo *a, const PaMacCoreDeviceInfo *b)
-{
-	return (a->coreAudioDeviceID == b->coreAudioDeviceID);
-}
-
-/*
-	Find matching MacCoreDeviceInfo in a list.
-		Returns index on success or error code on failure:
-		-1:  No match
-		-2:  Multiple matches (ambiguous)
-*/
-static int MacCoreDevice_FindSingleMatch(
-	const PaMacCoreDeviceInfo *list, int count, const PaMacCoreDeviceInfo *device)
-{
-	int i = 0, match = -1, matchCount = 0;
-	for (i = 0; i < count; ++i)
-	{
-		if (MacCoreDevice_IsSame(device, &list[i]))
-		{
-			++matchCount;
-			match = i;
-		}
-	}
-	if (matchCount > 1) return -2;
-	return match;
-}
-
-/*
-	CommitDeviceInfos is an atomic non-failing operation.  Errors are not permissible!!
-*/
-static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHostApiIndex index,
-    void *scanResults, int deviceCount)
-{
-    PaMacAUHAL* auhalHostApi = (PaMacAUHAL*)hostApi;
-    PaError result = paNoError;
-	
-	PaMacScanDeviceInfosResults *scanData = ( PaMacScanDeviceInfosResults * ) scanResults;
-	
-	/*
-		Update connection IDs by correlating new deviceInfos (from scan) to existing ones.
-			Connections IDs are preserved when 1:1 matches are found, generated otherwise.
-	*/
-	{
-		int i, matchIndex;
-		
-		PaMacCoreDeviceInfo *deviceNew;
-		
-		for (i = 0; i < scanData->devCount; ++i)
-		{
-			deviceNew = &scanData->macDeviceInfos[i];
-			
-			// Search for a single matching device in the old list.
-			matchIndex = MacCoreDevice_FindSingleMatch(
-				auhalHostApi->macDeviceInfos, hostApi->info.deviceCount, deviceNew);
-			
-			// If a single
-			if (matchIndex >= 0)
-			{
-				PaMacCoreDeviceInfo *deviceOld = &auhalHostApi->macDeviceInfos[matchIndex];
-				
-				// Confirm that ONLY this new device matches the old one.
-				if (i == MacCoreDevice_FindSingleMatch(
-					scanData->macDeviceInfos, scanData->devCount, deviceOld))
-				{
-					// Preserve connection ID
-					deviceNew->inheritedDeviceInfo.connectionId =
-						deviceOld->inheritedDeviceInfo.connectionId;
-					
-					VVDBUG(("  ... Preserved ID %ld\n", (long) deviceNew->inheritedDeviceInfo.connectionId));
-				}
-				else
-				{
-					// If multiple new devices match the old one, fall through to "no match" code.
-					VVDBUG(("  WARNING: MULTIPLE NEW DEVICES MATCH OLD DEVICE\n"));
-					matchIndex = -1;
-				}
-			}
-			
-			
-			if (matchIndex < 0)
-			{
-				// No 1:1 match was found...
-				if (matchIndex == -2) VVDBUG(("  WARNING: MULTIPLE OLD DEVICES MATCH NEW DEVICE\n"));
-				
-				// Assign newly-generation connection ID
-				deviceNew->inheritedDeviceInfo.connectionId = PaUtil_MakeDeviceConnectionId();
-				
-				VVDBUG(("  ... Assigned new ID %ld\n", (long) deviceNew->inheritedDeviceInfo.connectionId));
-			}
-		}
-	}
-	
-	hostApi->info.deviceCount = 0;
-	hostApi->info.defaultInputDevice = paNoDevice;
-	hostApi->info.defaultOutputDevice = paNoDevice;
-
-    /* Free the old deviceInfos block.  (one block includes pointers and PaMacCoreDeviceInfos!) */
-    if( hostApi->deviceInfos )
-    {
-        FreeMacCoreDeviceInfo( auhalHostApi, hostApi->deviceInfos, auhalHostApi->devCount );
-        hostApi->deviceInfos = NULL;
-    }
-
-    if( scanResults != NULL )
-    {
-		if( deviceCount > 0 )
-        {
-            /* use the array allocated in ScanDeviceInfos() as our deviceInfos */
-            hostApi->deviceInfos = scanData->deviceInfos;
-            hostApi->info.defaultInputDevice = scanData->defaultInputDevice;
-            hostApi->info.defaultOutputDevice = scanData->defaultOutputDevice;
-            hostApi->info.deviceCount = deviceCount;
-			
-            auhalHostApi->macDeviceInfos = scanData->macDeviceInfos;
-            auhalHostApi->devCount = scanData->devCount;
-            //auhalHostApi->defaultIn = scanDeviceInfosResults->defaultInputDevice;
-            //auhalHostApi->defaultOut = scanDeviceInfosResults->defaultOutputDevice;
-        }
-    }
-	
-	PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanData );
-
-    return result;
-}
-
-static PaError DisposeDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, void *scanResults, int deviceCount)
-{
-    PaMacAUHAL *auhalHostApi = (PaMacAUHAL*)hostApi;
-
-    if( scanResults != NULL )
-    {
-        PaMacScanDeviceInfosResults *scanData = ( PaMacScanDeviceInfosResults * ) scanResults;
-        if( scanData->deviceInfos )
-        {
-            /* all device info structs are allocated in a block so we can destroy them here */
-			FreeMacCoreDeviceInfo( auhalHostApi, scanData->deviceInfos, scanData->devCount );
-        }
-
-        PaUtil_GroupFreeMemory(auhalHostApi->allocations, scanData );
-    }
-
-    return paNoError;
 }
 
