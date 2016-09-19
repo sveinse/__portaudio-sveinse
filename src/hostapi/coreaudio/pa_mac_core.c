@@ -733,8 +733,6 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 	AudioDeviceID *deviceIDList  = NULL;
 	AudioDeviceID  defaultInputCoreAudioDeviceID, defaultOutputCoreAudioDeviceID;
 	
-	VVDBUG(("ScanDeviceInfos()\n"));
-	
 	/*
 		Query audio device list and default I/O devices, all at once.
 			I'm worried about race conditions here...  --Evan
@@ -777,9 +775,13 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 		deviceIDCount = (deviceIdListSize / sizeof(AudioDeviceID));
 		
 #ifdef MAC_CORE_VERBOSE_DEBUG
-		VDBUG( ( "Found %ld device(s)...\n", *deviceIDCount ) );
+		VDBUG(("PA/CoreAudio ScanDeviceInfos()\n"));
+		VDBUG( ( "  Found %ld device(s)...\n", *deviceIDCount ) );
 		for( i=0; i<scanResults->devCount; ++i )
-			VDBUG( ( "  Device #%d\t: %ld\n", i, deviceIDList[i] ) );
+			VDBUG( ( "    Device #%d\t: ID %ld\n", i, deviceIDList[i] ) );
+		
+		VDBUG( ( "  Default input ID: %ld\n", defaultInputCoreAudioDeviceID ) );
+		VDBUG( ( "  Default output ID: %ld\n", defaultOutputCoreAudioDeviceID ) );
 #endif
 	}
 	
@@ -804,62 +806,34 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 		/* If InitializeDeviceInfo fails, drop the problem device from the list. */
 		if (err != paNoError)
 		{
+			VDBUG( ( "  Dropping device #%d, failed to initialize info", i) );
 			--scanResults->devCount;
 			--i;
 			continue;
 		}
 		
 		/*
-			Check if this is the default input or output.
+			Logic to select the default input or output.
+				Generally this will match to core audio's suggested default I/O.
+				Failing that, the first device with available channels will be chosen.
 		*/
-		if (scanResults->macDeviceInfos[i].coreAudioDeviceID == defaultInputCoreAudioDeviceID)
-		{
-			scanResults->defaultInputDevice = i;
-		}
-		if (scanResults->macDeviceInfos[i].coreAudioDeviceID == defaultOutputCoreAudioDeviceID)
-		{
-			scanResults->defaultOutputDevice = i;
-		}
-	}
-	
-	
-	/*
-		If the default input or output was not found, attempt to find a substitute.
-			(Is this actually useful?  It's a holdover from libjitsi.  --Evan)
-	*/
-	if (scanResults->defaultInputDevice == paNoDevice)
-	{
-		VDBUG(("Failed to get default input device from OS."));
-		VDBUG((" I will substitute the first available input Device."));
-		
-		for( i=0; i < scanResults->devCount; ++i )
+		if (scanResults->macDeviceInfos[i].coreAudioDeviceID == defaultInputCoreAudioDeviceID
+			|| scanResults->defaultInputDevice == paNoDevice)
 		{
 			if (scanResults->deviceInfos[i]->maxInputChannels)
-			{
 				scanResults->defaultInputDevice = i;
-				break;
-			}
 		}
-	}
-	
-	if (scanResults->defaultOutputDevice == paNoDevice)
-	{
-		VDBUG(("Failed to get default output device from OS."));
-		VDBUG((" I will substitute the first available output Device."));
-		
-		for( i=0; i < scanResults->devCount; ++i )
+		if (scanResults->macDeviceInfos[i].coreAudioDeviceID == defaultOutputCoreAudioDeviceID
+			|| scanResults->defaultOutputDevice == paNoDevice)
 		{
 			if (scanResults->deviceInfos[i]->maxOutputChannels)
-			{
 				scanResults->defaultOutputDevice = i;
-				break;
-			}
 		}
 	}
 	
 	
-	VDBUG( ( "Default in : Device #%ld\n", scanResults->defaultInputDevice  ) );
-    VDBUG( ( "Default out: Device #%ld\n", scanResults->defaultOutputDevice ) );
+	VDBUG( ( "Default input: Device #%ld\n", scanResults->defaultInputDevice  ) );
+    VDBUG( ( "Default output: Device #%ld\n", scanResults->defaultOutputDevice ) );
 	
 	*scanResultsOut = scanResults;
     *newDeviceCount = scanResults->devCount;
