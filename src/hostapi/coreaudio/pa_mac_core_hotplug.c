@@ -11,7 +11,7 @@
 
 typedef struct PaMacCoreHotplugState
 {
-	// We can store hotplug notifier state in this structure if needed.
+	/* We can store hotplug notifier state in this structure if needed. */
 	int dummy;
 	
 	pthread_mutex_t mutex;
@@ -24,9 +24,9 @@ static PaMacCoreHotplugState paMacCoreHotplugState;
 static OSStatus PaMacDevicesChanged
 	(AudioHardwarePropertyID inPropertyID, void *userData)
 {
-	//PaMacCoreHotplugState *hotplugState = (PaMacCoreHotplugState*) userData;
+	/* PaMacCoreHotplugState *hotplugState = (PaMacCoreHotplugState*) userData; */
 	
-	// Dispatch the notification.
+	/* Dispatch the notification. */
 	PaUtil_DevicesChanged(0, NULL);
 	
 	return noErr;
@@ -37,10 +37,10 @@ void PaUtil_InitializeHotPlug()
 {
 	OSStatus err = noErr;
 	
-	// Set up a non-recursive mutex for notification locking
+	/* Set up a non-recursive mutex for notification locking */
 	pthread_mutex_init(&paMacCoreHotplugState.mutex, NULL);
 	
-	// Add property listeners
+	/* Add property listeners */
 	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDevices,             &PaMacDevicesChanged, &paMacCoreHotplugState);
 	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDefaultInputDevice,  &PaMacDevicesChanged, &paMacCoreHotplugState);
 	err |= AudioHardwareAddPropertyListener(kAudioHardwarePropertyDefaultOutputDevice, &PaMacDevicesChanged, &paMacCoreHotplugState);
@@ -52,7 +52,7 @@ void PaUtil_InitializeHotPlug()
 }
 void PaUtil_TerminateHotPlug()
 {
-	// Remove property listeners
+	/* Remove property listeners */
 	AudioHardwareRemovePropertyListener(kAudioHardwarePropertyDevices,             &PaMacDevicesChanged);
 	AudioHardwareRemovePropertyListener(kAudioHardwarePropertyDefaultInputDevice,  &PaMacDevicesChanged);
 	AudioHardwareRemovePropertyListener(kAudioHardwarePropertyDefaultOutputDevice, &PaMacDevicesChanged);
