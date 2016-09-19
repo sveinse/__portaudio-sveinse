@@ -842,35 +842,18 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 }
 
 /*
-	Device-matching subroutine.  Returns 1 if matching, 0 otherwise.
-		Currently, only AudioDeviceID is considered.
+	Find matching MacCoreDeviceInfo in a list.  Returns index on success or -1 on failure.
 */
-static bool MacCoreDevice_IsSame(
-	const PaMacCoreDeviceInfo *a, const PaMacCoreDeviceInfo *b)
-{
-	return (a->coreAudioDeviceID == b->coreAudioDeviceID);
-}
-
-/*
-	Find matching MacCoreDeviceInfo in a list.
-		Returns index on success or error code on failure:
-		-1:  No match
-		-2:  Multiple matches (ambiguous)
-*/
-static int MacCoreDevice_FindSingleMatch(
+static int MacCoreDevice_FindMatch(
 	const PaMacCoreDeviceInfo *list, int count, const PaMacCoreDeviceInfo *device)
 {
-	int i = 0, match = -1, matchCount = 0;
+	int i = 0;
 	for (i = 0; i < count; ++i)
 	{
-		if (MacCoreDevice_IsSame(device, &list[i]))
-		{
-			++matchCount;
-			match = i;
-		}
+		/* We only consider AudioDeviceID for matching.  It behaves like connectionId. */
+		if (device->coreAudioDeviceID == list[i].coreAudioDeviceID) return i;
 	}
-	if (matchCount > 1) return -2;
-	return match;
+	return -1;
 }
 
 /*
@@ -891,47 +874,29 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 	{
 		int i, matchIndex;
 		
-		PaMacCoreDeviceInfo *deviceNew;
+		PaMacCoreDeviceInfo *currentDevice;
 		
 		for (i = 0; i < scanResults->devCount; ++i)
 		{
-			deviceNew = &scanResults->macDeviceInfos[i];
+			currentDevice = &scanResults->macDeviceInfos[i];
 			
-			// Search for a single matching device in the old list.
-			matchIndex = MacCoreDevice_FindSingleMatch(
-				auhalHostApi->macDeviceInfos, hostApi->info.deviceCount, deviceNew);
+			/* Search for a single matching device in the old list. */
+			matchIndex = MacCoreDevice_FindMatch(
+				auhalHostApi->macDeviceInfos, hostApi->info.deviceCount, currentDevice);
 			
-			// If a single
+			/* If a single */
 			if (matchIndex >= 0)
 			{
-				PaMacCoreDeviceInfo *deviceOld = &auhalHostApi->macDeviceInfos[matchIndex];
-				
-				// Confirm that ONLY this new device matches the old one.
-				if (i == MacCoreDevice_FindSingleMatch(
-					scanResults->macDeviceInfos, scanResults->devCount, deviceOld))
-				{
-					// Preserve connection ID
-					deviceNew->inheritedDeviceInfo.connectionId =
-						deviceOld->inheritedDeviceInfo.connectionId;
+				/* Preserve connection ID from the matching device. */
+				currentDevice->inheritedDeviceInfo.connectionId =
+					auhalHostApi->macDeviceInfos[matchIndex].inheritedDeviceInfo.connectionId;
 					
-					VVDBUG(("  ... Preserved ID %ld\n", (long) deviceNew->inheritedDeviceInfo.connectionId));
-				}
-				else
-				{
-					// If multiple new devices match the old one, fall through to "no match" code.
-					VVDBUG(("  WARNING: MULTIPLE NEW DEVICES MATCH OLD DEVICE\n"));
-					matchIndex = -1;
-				}
+				VVDBUG(("  ... Preserved ID %ld\n", (long) deviceNew->inheritedDeviceInfo.connectionId));
 			}
-			
-			
-			if (matchIndex < 0)
+			else
 			{
-				// No 1:1 match was found...
-				if (matchIndex == -2) VVDBUG(("  WARNING: MULTIPLE OLD DEVICES MATCH NEW DEVICE\n"));
-				
-				// Assign newly-generation connection ID
-				deviceNew->inheritedDeviceInfo.connectionId = PaUtil_MakeDeviceConnectionId();
+				/* No match was found.  Assign newly-generated connection ID. */
+				currentDevice->inheritedDeviceInfo.connectionId = PaUtil_MakeDeviceConnectionId();
 				
 				VVDBUG(("  ... Assigned new ID %ld\n", (long) deviceNew->inheritedDeviceInfo.connectionId));
 			}
@@ -962,8 +927,6 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 			
             auhalHostApi->macDeviceInfos = scanResults->macDeviceInfos;
             auhalHostApi->devCount = scanResults->devCount;
-            //auhalHostApi->defaultIn = scanDeviceInfosResults->defaultInputDevice;
-            //auhalHostApi->defaultOut = scanDeviceInfosResults->defaultOutputDevice;
         }
 		
 		/* The scan results no longer own this array --- NULL it so it isn't deleted. */
