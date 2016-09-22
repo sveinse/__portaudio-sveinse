@@ -98,7 +98,7 @@ signed long GetStreamReadAvailable( PaStream* stream );
 signed long GetStreamWriteAvailable( PaStream* stream );
 
 /*
-	PaMacCoreDeviceInfo -- extended PaDeviceInfo
+	PaMacCoreDeviceInfo -- extended PaDeviceInfo (internal use only)
 */
 typedef struct
 {

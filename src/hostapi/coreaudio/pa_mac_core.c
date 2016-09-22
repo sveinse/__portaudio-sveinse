@@ -109,10 +109,7 @@ typedef struct PaMacCoreScanResults
 	
 } PaMacCoreScanResults;
 
-/*
-	Free an array of PaMacCoreDeviceInfo, and any appended buffer.
-		In practice, a look-up table of type PaDeviceInfo** is appended and will be freed.
-*/
+
 static void FreeMacCoreDeviceInfos(PaMacAUHAL *auhalHostApi, PaMacCoreDeviceInfo *infos, long count)
 {
 	if (infos)
@@ -124,7 +121,6 @@ static void FreeMacCoreDeviceInfos(PaMacAUHAL *auhalHostApi, PaMacCoreDeviceInfo
 			PaMacCoreDeviceInfo *macInfo = &infos[i];
 			PaDeviceInfo        *info    = (PaDeviceInfo*) macInfo;
 			
-			/* Clean up any of the device's allocated fields... */
 			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (void*) info->name );
 		}
 	}
@@ -654,10 +650,8 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
 
     VVDBUG(("InitializeDeviceInfo(): macCoreDeviceId=%ld\n", macCoreDeviceId));
 
-	/* Clear the structure. */
     memset(macDeviceInfo, 0, sizeof(PaMacCoreDeviceInfo));
 
-	/* Assign basic fields */
     deviceInfo->structVersion = 3;
     deviceInfo->hostApi = hostApiIndex;
 	macDeviceInfo->coreAudioDeviceID = coreAudioDeviceID;
@@ -692,7 +686,6 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
 		CFRelease(nameRef);
 	}
     deviceInfo->name = name;
-    deviceInfo->connectionId = 0;
 
     /* Try to get the default sample rate.  Don't fail if we can't get this. */
     propSize = sizeof(Float64);
@@ -733,8 +726,9 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 	AudioDeviceID  defaultInputCoreAudioDeviceID, defaultOutputCoreAudioDeviceID;
 	
 	/*
-		Query audio device list and default I/O devices, all at once.
-			I'm worried about race conditions here...  --Evan
+		Query audio device list and default I/O devices in close proximity.
+			This minimizes the chance of a race condition where a reported default device is not in
+			the device list.
 	*/
 	{
 		OSStatus osErr;
@@ -749,7 +743,7 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 		if (osErr != noErr) return paUnanticipatedHostError;
 		
 		
-		/* Store the device list in an alloca() buffer.  This is well-supported on Mac. */
+		/* Store temporary list of device IDs in an alloca() buffer. */
 		deviceIDList = (AudioDeviceID *) alloca(deviceIdListSize);
 		
 		osErr = AudioHardwareGetProperty( kAudioHardwarePropertyDevices,
@@ -846,7 +840,7 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 static int MacCoreDevice_FindMatch(
 	const PaMacCoreDeviceInfo *list, int count, const PaMacCoreDeviceInfo *device)
 {
-	int i = 0;
+	int i;
 	for (i = 0; i < count; ++i)
 	{
 		/* We only consider AudioDeviceID for matching.  It behaves like connectionId. */
@@ -883,7 +877,6 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 			matchIndex = MacCoreDevice_FindMatch(
 				auhalHostApi->macDeviceInfos, hostApi->info.deviceCount, currentDevice);
 			
-			/* If a single */
 			if (matchIndex >= 0)
 			{
 				/* Preserve connection ID from the matching device. */
@@ -911,7 +904,7 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
     {
         FreeMacCoreDeviceInfos( auhalHostApi, auhalHostApi->macDeviceInfos, auhalHostApi->devCount );
 		auhalHostApi->macDeviceInfos = NULL;
-        hostApi     ->deviceInfos    = NULL;
+        hostApi->deviceInfos = NULL;
     }
 
     if( scanResults != NULL )

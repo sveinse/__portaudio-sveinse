@@ -11,9 +11,6 @@
 
 typedef struct PaMacCoreHotplugState
 {
-	/* We can store hotplug notifier state in this structure if needed. */
-	int dummy;
-	
 	pthread_mutex_t mutex;
 }
 	PaMacCoreHotplugState;
