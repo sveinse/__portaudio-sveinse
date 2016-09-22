@@ -117,8 +117,7 @@ typedef struct
 
     PaUtilAllocationGroup *allocations;
 
-    /* implementation specific data goes here */
-    long devCount;
+    /* implementation-specific device data. */
     PaMacCoreDeviceInfo *macDeviceInfos;
 }
 PaMacAUHAL;

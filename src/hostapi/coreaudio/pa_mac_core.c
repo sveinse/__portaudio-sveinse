@@ -95,7 +95,7 @@ static PaError DisposeDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, v
 /* used for tranferring device infos during scanning / rescanning */
 typedef struct PaMacCoreScanResults
 {
-	long devCount;
+	long deviceCount;
 	
 	/* A contiguous array of device data for one scan. */
 	PaMacCoreDeviceInfo *macDeviceInfos;
@@ -142,7 +142,7 @@ static PaMacCoreScanResults* AllocateMacCoreScanResults( PaMacAUHAL *auhalHostAp
 	if (!scanResults) return NULL;
 	
 	/* Set the device count. */
-	scanResults->devCount = deviceCount;
+	scanResults->deviceCount = deviceCount;
 
 	/* Allocate the (long-lived) MacCoreDeviceInfo array and lookup table. */
 	scanResults->macDeviceInfos = (PaMacCoreDeviceInfo*)
@@ -174,7 +174,7 @@ static void FreeMacCoreScanResults( PaMacAUHAL *auhalHostApi, PaMacCoreScanResul
 {
 	if( scanResults )
 	{
-		FreeMacCoreDeviceInfos( auhalHostApi, scanResults->macDeviceInfos, scanResults->devCount );
+		FreeMacCoreDeviceInfos( auhalHostApi, scanResults->macDeviceInfos, scanResults->deviceCount );
 		
 		PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanResults->deviceInfos );
 
@@ -189,10 +189,10 @@ static void FreeMacCoreScanResults( PaMacAUHAL *auhalHostApi, PaMacCoreScanResul
 static void InitMacCoreScanResults( PaMacCoreScanResults *scanResults )
 {
 	int i;
-	memset( scanResults->macDeviceInfos, 0, sizeof(PaMacCoreDeviceInfo) * scanResults->devCount );
+	memset( scanResults->macDeviceInfos, 0, sizeof(PaMacCoreDeviceInfo) * scanResults->deviceCount );
 	
 	/* Initialize the lookup table.  It is very unlikely we will change it. */
-	for (i = 0; i < scanResults->devCount; ++i)
+	for (i = 0; i < scanResults->deviceCount; ++i)
 		scanResults->deviceInfos[i] = &scanResults->macDeviceInfos[i].inheritedDeviceInfo;
 	
 	/* We don't initially know about any default devices... */
@@ -778,7 +778,7 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 #ifdef MAC_CORE_VERBOSE_DEBUG
 		VDBUG(("PA/CoreAudio ScanDeviceInfos()\n"));
 		VDBUG( ( "  Found %ld device(s)...\n", *deviceIDCount ) );
-		for( i=0; i<scanResults->devCount; ++i )
+		for( i=0; i<scanResults->deviceCount; ++i )
 			VDBUG( ( "    Device #%d\t: ID %ld\n", i, deviceIDList[i] ) );
 		
 		VDBUG( ( "  Default input ID: %ld\n", defaultInputCoreAudioDeviceID ) );
@@ -798,7 +798,7 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 	/*
 		Initialize audio device descriptions...
 	*/
-	for( i=0; i < scanResults->devCount; ++i )
+	for( i=0; i < scanResults->deviceCount; ++i )
 	{
 		PaError err;
 		err = InitializeDeviceInfo( auhalHostApi, &scanResults->macDeviceInfos[i],
@@ -808,7 +808,7 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 		if (err != paNoError)
 		{
 			VDBUG( ( "  Dropping device #%d, failed to initialize info", i) );
-			--scanResults->devCount;
+			--scanResults->deviceCount;
 			--i;
 			continue;
 		}
@@ -837,7 +837,7 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
     VDBUG( ( "Default output: Device #%ld\n", scanResults->defaultOutputDevice ) );
 	
 	*scanResultsOut = scanResults;
-    *newDeviceCount = scanResults->devCount;
+    *newDeviceCount = scanResults->deviceCount;
 
     return paNoError;
 }
@@ -868,9 +868,9 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 	
 	PaMacCoreScanResults *scanResults = ( PaMacCoreScanResults * ) scanResultsIn;
 	
-	if( scanResults == NULL )
+	if( scanResults == NULL || deviceCount != scanResults->deviceCount )
 	{
-		/* This is an intolerable failure on the part of the PortAudio core. */
+		/* These are unlikely and intolerable failures on the part of the PortAudio core. */
 		return paInternalError;
 	}
 	
@@ -883,7 +883,7 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 		
 		PaMacCoreDeviceInfo *currentDevice;
 		
-		for (i = 0; i < scanResults->devCount; ++i)
+		for (i = 0; i < deviceCount; ++i)
 		{
 			currentDevice = &scanResults->macDeviceInfos[i];
 			
@@ -909,33 +909,20 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 		}
 	}
 	
-	/* Erase all device-list information from the host API. */
-	auhalHostApi->devCount = 0;
-	hostApi->info.deviceCount = 0;
-	hostApi->info.defaultInputDevice = paNoDevice;
-	hostApi->info.defaultOutputDevice = paNoDevice;
-	FreeMacCoreDeviceInfos( auhalHostApi, auhalHostApi->macDeviceInfos, auhalHostApi->devCount );
+	/* Free host API's allocated device info buffer and lookup table. */
+	FreeMacCoreDeviceInfos( auhalHostApi, auhalHostApi->macDeviceInfos, hostApi->info.deviceCount );
 	PaUtil_GroupFreeMemory( auhalHostApi->allocations, hostApi->deviceInfos );
-	auhalHostApi->macDeviceInfos = NULL;
-	hostApi->deviceInfos = NULL;
 
-	/* Transfer the device list produced by the scan to the host API. */
-	if( deviceCount > 0 )
-	{
-		/* FIXME are these fields redundant? */
-		auhalHostApi->devCount = scanResults->devCount;
-		hostApi->info.deviceCount = deviceCount;
-		
-		/* Transfer ownership of deviceInfos arrays. */
-		auhalHostApi->macDeviceInfos = scanResults->macDeviceInfos;
-		hostApi->deviceInfos = scanResults->deviceInfos;
-		scanResults->macDeviceInfos = NULL;
-		scanResults->deviceInfos = NULL;
+	/* Transfer the device information from scanResults to the host API. */
+	hostApi->info.deviceCount = deviceCount;
+	hostApi->info.defaultInputDevice = scanResults->defaultInputDevice;
+	hostApi->info.defaultOutputDevice = scanResults->defaultOutputDevice;
 	
-		/* use the array allocated in ScanDeviceInfos() as our deviceInfos */
-		hostApi->info.defaultInputDevice = scanResults->defaultInputDevice;
-		hostApi->info.defaultOutputDevice = scanResults->defaultOutputDevice;
-	}
+	/* ...scanResults loses ownership of these allocated arrays during the transfer. */
+	auhalHostApi->macDeviceInfos = scanResults->macDeviceInfos;
+	hostApi->deviceInfos = scanResults->deviceInfos;
+	scanResults->macDeviceInfos = NULL;
+	scanResults->deviceInfos = NULL;
 	
 	/* The core requires us to free the scan results, which have no further use. */
 	FreeMacCoreScanResults( auhalHostApi, scanResults );
@@ -995,7 +982,6 @@ PaError PaMacCore_Initialize( PaUtilHostApiRepresentation **hostApi, PaHostApiIn
         goto error;
     }
 
-    auhalHostApi->devCount = 0;
     auhalHostApi->macDeviceInfos = NULL;
 
     *hostApi = &auhalHostApi->inheritedHostApiRep;
