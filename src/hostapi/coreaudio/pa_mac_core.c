@@ -110,22 +110,22 @@ typedef struct PaMacCoreScanResults
 } PaMacCoreScanResults;
 
 
-static void FreeMacCoreDeviceInfos(PaMacAUHAL *auhalHostApi, PaMacCoreDeviceInfo *infos, long count)
+static void FreeMacCoreDeviceInfos( PaMacAUHAL *auhalHostApi, PaMacCoreDeviceInfo *infos, long count )
 {
-	if (infos)
+	if( infos )
 	{
 		int i;
 		
-		for (i = 0; i < count; ++i)
+		for( i = 0; i < count; ++i )
 		{
 			PaMacCoreDeviceInfo *macInfo = &infos[i];
 			PaDeviceInfo        *info    = (PaDeviceInfo*) macInfo;
 			
-			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (void*) info->name );
+			PaUtil_GroupFreeMemory( auhalHostApi->allocations, (char*) info->name );
 		}
+		
+		PaUtil_GroupFreeMemory( auhalHostApi->allocations, infos );
 	}
-	
-	PaUtil_GroupFreeMemory( auhalHostApi->allocations, infos );
 }
 
 /*
@@ -133,55 +133,63 @@ static void FreeMacCoreDeviceInfos(PaMacAUHAL *auhalHostApi, PaMacCoreDeviceInfo
 		Device array
 		Return NULL on insufficient memory failure.
 */
-static PaMacCoreScanResults* AllocateMacCoreScanResults(PaMacAUHAL *auhalHostApi, long deviceCount)
+static PaMacCoreScanResults* AllocateMacCoreScanResults( PaMacAUHAL *auhalHostApi, long deviceCount )
 {
 	/* Allocate the (short-lived) scan results structure. */
 	PaMacCoreScanResults *scanResults = (PaMacCoreScanResults *)
-		PaUtil_GroupAllocateMemory(auhalHostApi->allocations, sizeof(PaMacCoreScanResults) );
+		PaUtil_GroupAllocateMemory( auhalHostApi->allocations, sizeof(PaMacCoreScanResults) );
 	
 	if (!scanResults) return NULL;
-
-	/* Allocate the (long-lived) MacCoreDeviceInfo array with appended lookup table. */
-	scanResults->macDeviceInfos = (PaMacCoreDeviceInfo*)
-		PaUtil_GroupAllocateMemory(auhalHostApi->allocations,
-			(sizeof(PaDeviceInfo*)+sizeof(PaMacCoreDeviceInfo)) * deviceCount);
-
-	/* If we failed  */
-	if ( !scanResults->macDeviceInfos )
-	{
-		PaUtil_GroupFreeMemory(auhalHostApi->allocations, scanResults);
-		return NULL;
-	}
 	
 	/* Set the device count. */
 	scanResults->devCount = deviceCount;
 
-	/* Lookup table is located after MacCoreDeviceInfo array. */
-	scanResults->deviceInfos = (PaDeviceInfo**) &scanResults->macDeviceInfos[deviceCount];
+	/* Allocate the (long-lived) MacCoreDeviceInfo array and lookup table. */
+	scanResults->macDeviceInfos = (PaMacCoreDeviceInfo*)
+		PaUtil_GroupAllocateMemory( auhalHostApi->allocations,
+			deviceCount * sizeof( PaMacCoreDeviceInfo ) );
+		
+	scanResults->deviceInfos = (PaDeviceInfo**)
+		PaUtil_GroupAllocateMemory( auhalHostApi->allocations,
+			deviceCount * sizeof( PaDeviceInfo** ) );
+
+	/* If we failed  */
+	if ( !scanResults->deviceInfos )    goto failed_allocation;
+	if ( !scanResults->macDeviceInfos ) goto failed_allocation;
 	
 	return scanResults;
+	
+failed_allocation:
+	PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanResults->deviceInfos );
+	PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanResults->macDeviceInfos );
+	PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanResults );
+	return NULL;
 }
 
 /*
 	Free a MacCoreScanResults structure.
-		If non-NULL, its macDeviceInfos array will be freed by FreeMacCoreDeviceInfos!
+		If non-NULL, macDeviceInfos and deviceInfos will also be freed!
 */
-static void FreeMacCoreScanResults(PaMacAUHAL *auhalHostApi, PaMacCoreScanResults *scanResults)
+static void FreeMacCoreScanResults( PaMacAUHAL *auhalHostApi, PaMacCoreScanResults *scanResults )
 {
-	if (scanResults)
-		FreeMacCoreDeviceInfos(auhalHostApi, scanResults->macDeviceInfos, scanResults->devCount);
+	if( scanResults )
+	{
+		FreeMacCoreDeviceInfos( auhalHostApi, scanResults->macDeviceInfos, scanResults->devCount );
+		
+		PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanResults->deviceInfos );
 
-	PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanResults );
+		PaUtil_GroupFreeMemory( auhalHostApi->allocations, scanResults );
+	}
 }
 
 /*
 	Initialize the fields of a PaMacCoreScanResults structure to sensible defaults.
 		Zero all PaMacCoreDeviceInfos structures within.
 */
-static void InitMacCoreScanResults(PaMacCoreScanResults *scanResults)
+static void InitMacCoreScanResults( PaMacCoreScanResults *scanResults )
 {
 	int i;
-	memset(scanResults->macDeviceInfos, 0, sizeof(PaMacCoreDeviceInfo) * scanResults->devCount);
+	memset( scanResults->macDeviceInfos, 0, sizeof(PaMacCoreDeviceInfo) * scanResults->devCount );
 	
 	/* Initialize the lookup table.  It is very unlikely we will change it. */
 	for (i = 0; i < scanResults->devCount; ++i)
@@ -707,8 +715,8 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
 	
 error:
 	//Release strings to avoid a memory leak
-	if (deviceInfo->name)
-		PaUtil_GroupFreeMemory(auhalHostApi->allocations, (void*) deviceInfo->name);
+	if( deviceInfo->name )
+		PaUtil_GroupFreeMemory( auhalHostApi->allocations, (char*) deviceInfo->name );
 	return err;
 }
 
@@ -860,6 +868,12 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 	
 	PaMacCoreScanResults *scanResults = ( PaMacCoreScanResults * ) scanResultsIn;
 	
+	if( scanResults == NULL )
+	{
+		/* This is an intolerable failure on the part of the PortAudio core. */
+		return paInternalError;
+	}
+	
 	/*
 		Update connection IDs by correlating new deviceInfos (from scan) to existing ones.
 			Connections IDs are preserved when 1:1 matches are found, generated otherwise.
@@ -895,36 +909,35 @@ static PaError CommitDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, Pa
 		}
 	}
 	
+	/* Erase all device-list information from the host API. */
+	auhalHostApi->devCount = 0;
 	hostApi->info.deviceCount = 0;
 	hostApi->info.defaultInputDevice = paNoDevice;
 	hostApi->info.defaultOutputDevice = paNoDevice;
+	FreeMacCoreDeviceInfos( auhalHostApi, auhalHostApi->macDeviceInfos, auhalHostApi->devCount );
+	PaUtil_GroupFreeMemory( auhalHostApi->allocations, hostApi->deviceInfos );
+	auhalHostApi->macDeviceInfos = NULL;
+	hostApi->deviceInfos = NULL;
 
-    /* Free the old deviceInfos block.  (includes the deviceInfos lookup table!) */
-    if( hostApi->deviceInfos )
-    {
-        FreeMacCoreDeviceInfos( auhalHostApi, auhalHostApi->macDeviceInfos, auhalHostApi->devCount );
-		auhalHostApi->macDeviceInfos = NULL;
-        hostApi->deviceInfos = NULL;
-    }
-
-    if( scanResults != NULL )
-    {
-		if( deviceCount > 0 )
-        {
-            /* use the array allocated in ScanDeviceInfos() as our deviceInfos */
-            hostApi->deviceInfos = scanResults->deviceInfos;
-            hostApi->info.defaultInputDevice = scanResults->defaultInputDevice;
-            hostApi->info.defaultOutputDevice = scanResults->defaultOutputDevice;
-            hostApi->info.deviceCount = deviceCount;
-			
-            auhalHostApi->macDeviceInfos = scanResults->macDeviceInfos;
-            auhalHostApi->devCount = scanResults->devCount;
-        }
+	/* Transfer the device list produced by the scan to the host API. */
+	if( deviceCount > 0 )
+	{
+		/* FIXME are these fields redundant? */
+		auhalHostApi->devCount = scanResults->devCount;
+		hostApi->info.deviceCount = deviceCount;
 		
-		/* The scan results no longer own this array --- NULL it so it isn't deleted. */
+		/* Transfer ownership of deviceInfos arrays. */
+		auhalHostApi->macDeviceInfos = scanResults->macDeviceInfos;
+		hostApi->deviceInfos = scanResults->deviceInfos;
 		scanResults->macDeviceInfos = NULL;
-    }
+		scanResults->deviceInfos = NULL;
 	
+		/* use the array allocated in ScanDeviceInfos() as our deviceInfos */
+		hostApi->info.defaultInputDevice = scanResults->defaultInputDevice;
+		hostApi->info.defaultOutputDevice = scanResults->defaultOutputDevice;
+	}
+	
+	/* The core requires us to free the scan results, which have no further use. */
 	FreeMacCoreScanResults( auhalHostApi, scanResults );
 
     return result;
