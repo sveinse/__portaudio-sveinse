@@ -426,6 +426,36 @@ static PaError OpenAndSetupOneAudioUnit(
 #define PA_AUHAL_SET_LAST_HOST_ERROR( errorCode, errorText ) \
     PaUtil_SetLastHostErrorInfo( paCoreAudio, errorCode, errorText )
 
+/*
+ * Callback called when starting or stopping a stream.
+ */
+static void startStopCallback(
+   void *               inRefCon,
+   AudioUnit            ci,
+   AudioUnitPropertyID  inID,
+   AudioUnitScope       inScope,
+   AudioUnitElement     inElement )
+{
+   PaMacCoreStream *stream = (PaMacCoreStream *) inRefCon;
+   UInt32 isRunning;
+   UInt32 size = sizeof( isRunning );
+   OSStatus err;
+   err = AudioUnitGetProperty( ci, kAudioOutputUnitProperty_IsRunning, inScope, inElement, &isRunning, &size );
+   assert( !err );
+   if( err )
+      isRunning = false; //it's very unclear what to do in case of error here. There's no real way to notify the user, and crashing seems unreasonable.
+   if( isRunning )
+      return; //We are only interested in when we are stopping
+   // -- if we are using 2 I/O units, we only need one notification!
+   if( stream->inputUnit && stream->outputUnit && stream->inputUnit != stream->outputUnit && ci == stream->inputUnit )
+      return;
+   PaStreamFinishedCallback *sfc = stream->streamRepresentation.streamFinishedCallback;
+   if( stream->state == STOPPING )
+      stream->state = STOPPED ;
+   if( sfc )
+      sfc( stream->streamRepresentation.userData );
+}
+
 /* =================================================================================================== */
 /**
  * @internal
@@ -1373,37 +1403,6 @@ static void CleanupDevicePropertyListeners( PaMacCoreStream *stream, AudioDevice
 }
 
 /* ================================================================================= */
-
-/*
- * Callback called when starting or stopping a stream.
- */
-static void startStopCallback(
-   void *               inRefCon,
-   AudioUnit            ci,
-   AudioUnitPropertyID  inID,
-   AudioUnitScope       inScope,
-   AudioUnitElement     inElement )
-{
-   PaMacCoreStream *stream = (PaMacCoreStream *) inRefCon;
-   UInt32 isRunning;
-   UInt32 size = sizeof( isRunning );
-   OSStatus err;
-   err = AudioUnitGetProperty( ci, kAudioOutputUnitProperty_IsRunning, inScope, inElement, &isRunning, &size );
-   assert( !err );
-   if( err )
-      isRunning = false; //it's very unclear what to do in case of error here. There's no real way to notify the user, and crashing seems unreasonable.
-   if( isRunning )
-      return; //We are only interested in when we are stopping
-   // -- if we are using 2 I/O units, we only need one notification!
-   if( stream->inputUnit && stream->outputUnit && stream->inputUnit != stream->outputUnit && ci == stream->inputUnit )
-      return;
-   PaStreamFinishedCallback *sfc = stream->streamRepresentation.streamFinishedCallback;
-   if( stream->state == STOPPING )
-      stream->state = STOPPED ;
-   if( sfc )
-      sfc( stream->streamRepresentation.userData );
-}
-
 static PaError OpenAndSetupOneAudioUnit(
                                    const PaMacCoreStream *stream,
                                    const PaStreamParameters *inStreamParams,
