@@ -783,7 +783,7 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
     void **scanResultsOut, int *newDeviceCount)
 {
     PaMacAUHAL* auhalHostApi = (PaMacAUHAL*)hostApi;
-    int i = 0; /* Keep this signed. */
+    int i, j;
 	
     PaMacCoreScanResults* scanResults = NULL;
 	
@@ -856,18 +856,17 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 	/*
 		Initialize audio device descriptions...
 	*/
-	for( i=0; i < scanResults->deviceCount; ++i )
+	for( i=0, j=0; j < deviceIDCount; ++j )
 	{
 		PaError err;
 		err = InitializeDeviceInfo( auhalHostApi, &scanResults->macDeviceInfos[i],
-									deviceIDList[i], hostApiIndex );
-		
+									deviceIDList[j], hostApiIndex );
+									
 		/* If InitializeDeviceInfo fails, drop the problem device from the list. */
 		if (err != paNoError)
 		{
-			VDBUG( ( "  Dropping device #%d, failed to initialize info", i) );
+			VDBUG( ( "  Dropping device #%d, failed to initialize info", j) );
 			--scanResults->deviceCount;
-			--i;
 			continue;
 		}
 		
@@ -888,6 +887,8 @@ static PaError ScanDeviceInfos(struct PaUtilHostApiRepresentation *hostApi, PaHo
 			if (scanResults->deviceInfos[i]->maxOutputChannels)
 				scanResults->defaultOutputDevice = i;
 		}
+		
+		++i;
 	}
 	
 	
