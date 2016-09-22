@@ -191,7 +191,7 @@ typedef struct PaMacCoreStream
     Float64 timestampOffsetCombined;
     Float64 timestampOffsetInputDevice;
     Float64 timestampOffsetOutputDevice;
-    
+	
 	/* Offsets in seconds to be applied to Apple timestamps to convert them to PA timestamps.
      * While the io proc is active, the following values are only accessed and manipulated by the ioproc */
     Float64 timestampOffsetCombined_ioProcCopy;
