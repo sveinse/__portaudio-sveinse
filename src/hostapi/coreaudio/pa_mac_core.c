@@ -292,7 +292,7 @@ const char *PaMacCore_GetChannelName( int device, int channelIndex, bool input )
 		nameRef = CFStringCreateWithFormat( NULL, NULL, CFSTR( "%s: %d"), hostApi->deviceInfos[device]->name, channelIndex + 1 );
 		
 		
-		size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(nameRef), kCFStringEncodingUTF8);;
+		size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(nameRef), kCFStringEncodingUTF8);
 		if( !ensureChannelNameSize( size ) )
 		{
 			CFRelease( nameRef );
@@ -303,7 +303,7 @@ const char *PaMacCore_GetChannelName( int device, int channelIndex, bool input )
 	}
 	else
 	{
-		size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(nameRef), kCFStringEncodingUTF8);;
+		size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(nameRef), kCFStringEncodingUTF8);
 		if( !ensureChannelNameSize( size ) )
 		{
 			CFRelease( nameRef );
@@ -644,15 +644,67 @@ static PaError GetChannelInfo( PaMacAUHAL *auhalHostApi,
 }
 
 /* =================================================================================================== */
+
+/* Get a  */
+static PaError QueryMacCoreAudioDevicePropertyString( PaMacAUHAL *auhalHostApi,
+                                                       const char **propertyValueOut,
+                                                       AudioDeviceID coreAudioDeviceID,
+                                                       AudioObjectPropertySelector coreAudioSelector,
+                                                       AudioObjectPropertySelector coreAudioSelectorCFSTR )
+{
+	UInt32 propSize;
+	char *value = NULL;
+	CFStringRef valueCFStringRef;
+	PaError err;
+	
+	propSize = sizeof(valueCFStringRef);
+    err = ERR(AudioDeviceGetProperty( coreAudioDeviceID, 0, 0, coreAudioSelectorCFSTR, &propSize, &valueCFStringRef ));
+    if ( err == paNoError )
+	{
+		/* Successfully acquired a CFString; convert it to a C-String for portaudio. */
+		propSize = CFStringGetMaximumSizeForEncoding( CFStringGetLength(valueCFStringRef), kCFStringEncodingUTF8 );
+		value = PaUtil_GroupAllocateMemory( auhalHostApi->allocations, propSize+1 );
+		if ( !value )
+		{
+			CFRelease( valueCFStringRef );
+			err = paInsufficientMemory;
+			goto error;
+		}
+		CFStringGetCString( valueCFStringRef, value, propSize+1, kCFStringEncodingUTF8 );
+		CFRelease( valueCFStringRef );
+	}
+	else
+	{
+		/* Fall back to a direct C-String query. */
+		err = ERR(AudioDeviceGetPropertyInfo( coreAudioDeviceID, 0, 0, coreAudioSelector, &propSize, NULL ));
+		if( err ) goto error;
+
+		value = PaUtil_GroupAllocateMemory( auhalHostApi->allocations, propSize+1 );
+		if ( !value )
+		{
+			err = paInsufficientMemory;
+			goto error;
+		}
+		
+		err = ERR(AudioDeviceGetProperty( coreAudioDeviceID, 0, 0, coreAudioSelector, &propSize, value ));
+		if( err ) goto error;
+	}
+	
+	*propertyValueOut = value;
+	return paNoError;
+	
+error:
+	PaUtil_GroupFreeMemory( auhalHostApi->allocations, value );
+	return err;
+}
+
 static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
                                      PaMacCoreDeviceInfo *macDeviceInfo,
                                      AudioDeviceID coreAudioDeviceID,
                                      PaHostApiIndex hostApiIndex )
 {
     Float64 sampleRate;
-    char *name;
     PaError err = paNoError;
-	CFStringRef nameRef;
     UInt32 propSize;
 	PaDeviceInfo *deviceInfo = &macDeviceInfo->inheritedDeviceInfo;
 
@@ -663,42 +715,18 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
     deviceInfo->structVersion = 3;
     deviceInfo->hostApi = hostApiIndex;
 	macDeviceInfo->coreAudioDeviceID = coreAudioDeviceID;
-
-    /* Get the device name using CFString */
-	propSize = sizeof(nameRef);
-    err = ERR(AudioDeviceGetProperty(coreAudioDeviceID, 0, 0, kAudioDevicePropertyDeviceNameCFString, &propSize, &nameRef));
-    if (err)
-    {
-		/* Get the device name using c string.  Fail if we can't get it. */
-		err = ERR(AudioDeviceGetPropertyInfo(coreAudioDeviceID, 0, 0, kAudioDevicePropertyDeviceName, &propSize, NULL));
-		if (err) goto error;
-
-		name = PaUtil_GroupAllocateMemory(auhalHostApi->allocations,propSize+1);
-		if ( !name ) {err = paInsufficientMemory; goto error;}
-		
-		err = ERR(AudioDeviceGetProperty(coreAudioDeviceID, 0, 0, kAudioDevicePropertyDeviceName, &propSize, name));
-		if (err) goto error;
-	}
-	else
-	{
-		/* valid CFString so we just allocate a c string big enough to contain the data */
-		propSize = CFStringGetMaximumSizeForEncoding(CFStringGetLength(nameRef), kCFStringEncodingUTF8);
-		name = PaUtil_GroupAllocateMemory(auhalHostApi->allocations, propSize+1);
-		if ( !name )
-		{
-			CFRelease(nameRef);
-			err = paInsufficientMemory;
-			goto error;
-		}
-		CFStringGetCString(nameRef, name, propSize+1, kCFStringEncodingUTF8);
-		CFRelease(nameRef);
-	}
-    deviceInfo->name = name;
+	
+	/* Query the device name. */
+	deviceInfo->name = NULL;
+	err = QueryMacCoreAudioDevicePropertyString( auhalHostApi, &deviceInfo->name, coreAudioDeviceID,
+		kAudioDevicePropertyDeviceName,
+		kAudioDevicePropertyDeviceNameCFString );
+	if( err ) goto error;
 
     /* Try to get the default sample rate.  Don't fail if we can't get this. */
     propSize = sizeof(Float64);
     err = ERR(AudioDeviceGetProperty(coreAudioDeviceID, 0, 0, kAudioDevicePropertyNominalSampleRate, &propSize, &sampleRate));
-    if (err)
+    if( err )
         deviceInfo->defaultSampleRate = 0.0;
     else
         deviceInfo->defaultSampleRate = sampleRate;
@@ -706,10 +734,10 @@ static PaError InitializeDeviceInfo( PaMacAUHAL *auhalHostApi,
     /* Get the maximum number of input and output channels.  Fail if we can't get this. */
 
     err = GetChannelInfo(auhalHostApi, deviceInfo, coreAudioDeviceID, 1);
-	if (err) goto error;
+	if( err ) goto error;
 
     err = GetChannelInfo(auhalHostApi, deviceInfo, coreAudioDeviceID, 0);
-	if (err) goto error;
+	if( err ) goto error;
 
     return paNoError;
 	
