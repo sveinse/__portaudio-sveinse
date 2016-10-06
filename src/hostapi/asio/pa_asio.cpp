@@ -3218,11 +3218,11 @@ static long fireMessageCallback( PaAsioStream *asioStream, long messageType, lon
 	/* Fire callbacks and determine whether one or the other handles the message. */
 	if( asioStream->messageCallback[0] )
 	{
-		if( (*asioStream->messageCallback[0])(asioMessageType, value, message, opt, userData ) ) ret = 1;
+		if( (*asioStream->messageCallback[0])( messageType, value, message, opt, userData ) ) ret = 1;
 	}
 	if( asioStream->messageCallback[1] )
 	{
-		if( (*asioStream->messageCallback[1])(asioMessageType, value, message, opt, userData ) ) ret = 1;
+		if( (*asioStream->messageCallback[1])( messageType, value, message, opt, userData ) ) ret = 1;
 	}
 	
 	return ret;
@@ -3314,8 +3314,8 @@ static long asioMessages(long selector, long value, void* message, double* opt)
             // This will inform the host application that the drivers were latencies changed.
             // Beware, it this does not mean that the buffer sizes have changed!
             // You might need to update internal delay data.
-			callbackType = paAsioLatenciesChanged;
-			doCallback = 1;
+			paAsioMessageType = paAsioLatenciesChanged;
+			doClientCallback = 1;
             //printf("kAsioLatenciesChanged \n");
             break;
 
