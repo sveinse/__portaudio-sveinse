@@ -2023,7 +2023,7 @@ static PaError OpenStream( struct PaUtilHostApiRepresentation *hostApi,
     PaError result = paNoError;
     PaAsioHostApiRepresentation *asioHostApi = (PaAsioHostApiRepresentation*)hostApi;
     PaAsioStream *stream = 0;
-    PaAsioStreamInfo *inputStreamInfo, *outputStreamInfo;
+    PaAsioStreamInfo *inputStreamInfo = NULL, *outputStreamInfo = NULL;
     unsigned long framesPerHostBuffer;
     int inputChannelCount, outputChannelCount;
     PaSampleFormat inputSampleFormat, outputSampleFormat;
