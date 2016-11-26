@@ -61,6 +61,7 @@ opts["Build Targets"] = [_BoolOption("shared", "create shared library"), _BoolOp
 
 apis = []
 if Platform in Posix:
+    apis.append(_PackageOption("SNDIO", Platform == "openbsd"))
     apis.append(_PackageOption("OSS"))
     apis.append(_PackageOption("JACK"))
     apis.append(_PackageOption("ALSA", Platform == "linux"))

@@ -107,9 +107,16 @@ are defaulted to 1.
 #endif 
 
 /* Set default values for Unix based APIs. */
-#if defined(PA_NO_OSS) || defined(PA_NO_ALSA) || defined(PA_NO_JACK) || defined(PA_NO_COREAUDIO) || defined(PA_NO_SGI) || defined(PA_NO_ASIHPI)
+#if defined(PA_NO_SNDIO) || defined(PA_NO_OSS) || defined(PA_NO_ALSA) || defined(PA_NO_JACK) || defined(PA_NO_COREAUDIO) || defined(PA_NO_SGI) || defined(PA_NO_ASIHPI)
 #error "Portaudio: PA_NO_<APINAME> is no longer supported, please remove definition and use PA_USE_<APINAME> instead"
 #endif
+
+#ifndef PA_USE_SNDIO
+#define PA_USE_SNDIO 0
+#elif (PA_USE_SNDIO != 0) && (PA_USE_SNDIO != 1)
+#undef PA_USE_SNDIO
+#define PA_USE_SNDIO 1
+#endif 
 
 #ifndef PA_USE_OSS
 #define PA_USE_OSS 0

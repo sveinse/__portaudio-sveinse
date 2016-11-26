@@ -76,6 +76,8 @@ if Platform in Posix:
         optionalImpls["OSS"] = ("oss", "sys/soundcard.h", None)
 	if Platform == 'netbsd':
 	        optionalImpls["OSS"] = ("ossaudio", "sys/soundcard.h", "_oss_ioctl")
+    if env["useSNDIO"]:
+        optionalImpls["SNDIO"] = ("sndio", "sndio.h", "sio_open")
     if env["useASIHPI"]:
         optionalImpls["ASIHPI"] = ("hpi", "asihpi/hpi.h", "HPI_SubSysCreate")
     if env["useCOREAUDIO"]:
@@ -175,6 +177,8 @@ if "JACK" in optionalImpls:
     ImplSources.append(os.path.join("hostapi", "jack", "pa_jack.c"))
 if "OSS" in optionalImpls:
     ImplSources.append(os.path.join("hostapi", "oss", "pa_unix_oss.c"))
+if "SNDIO" in optionalImpls:
+    ImplSources.append(os.path.join("hostapi", "sndio", "pa_sndio.c"))
 if "ASIHPI" in optionalImpls:
     ImplSources.append(os.path.join("hostapi", "asihpi", "pa_linux_asihpi.c"))
 if "COREAUDIO" in optionalImpls:
