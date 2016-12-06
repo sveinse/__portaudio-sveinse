@@ -3241,10 +3241,17 @@ static void sampleRateChanged(ASIOSampleRate sRate)
     // You might have to update time/sample related conversion routines, etc.
 	
 	double opt = sRate;
+	
+	PA_DEBUG( ("asioSampleRateChanged : %f hz\n", opt));
+	
+	if (!theAsioStream)
+	{
+		/* Some ASIO drivers will fire messages during OpenStream.  We ignore them. */
+		PA_DEBUG( ("    ...message blocked, device not open yet.\n"));
+		return;
+	}
+	
 	fireMessageCallback( theAsioStream, paAsioSampleRateChanged, 0, 0, &opt );
-
-    (void) sRate; /* unused parameter */
-    PA_DEBUG( ("sampleRateChanged : %d \n", sRate));
 }
 
 static long asioMessages(long selector, long value, void* message, double* opt)
@@ -3258,6 +3265,13 @@ static long asioMessages(long selector, long value, void* message, double* opt)
     (void) opt;
 
     PA_DEBUG( ("asioMessages : %d , %d \n", selector, value));
+	
+	if (!theAsioStream)
+	{
+		/* Some ASIO drivers will fire messages during OpenStream.  We ignore them. */
+		PA_DEBUG( ("    ...message blocked, device not open yet.\n"));
+		return 0;
+	}
 
     switch(selector)
     {
