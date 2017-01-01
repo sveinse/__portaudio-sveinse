@@ -50,6 +50,7 @@
 */
 
 #include "pa_linux_pulseaudio_block.h"
+#include <unistd.h>
 
 /*
     As separate stream interfaces are used for blocking and callback
