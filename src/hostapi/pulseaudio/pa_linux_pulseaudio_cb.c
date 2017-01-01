@@ -50,8 +50,6 @@
 */
 
 
-#include <string.h>     /* strlen() */
-
 #include "pa_util.h"
 #include "pa_allocation.h"
 #include "pa_hostapi.h"
@@ -66,9 +64,7 @@
 
 
 /* PulseAudio headers */
-#include <stdio.h>
 #include <string.h>
-#include <pulse/pulseaudio.h>
 #include <unistd.h>
 
 void PaPulseAudio_StreamReadCb(
