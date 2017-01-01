@@ -69,6 +69,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pulse/pulseaudio.h>
+#include <unistd.h>
 
 void PaPulseAudio_StreamReadCb(
     pa_stream * s,
@@ -332,16 +333,16 @@ PaError PaPulseAudio_CloseStreamCb(
             PaUtil_FreeMemory(stream->outBuffer);
             stream->outBuffer = NULL;
         }
-        
+
         if((stream->outStream == NULL && stream->inStream == NULL) || l_iError >= 5000)
         {
               l_iLoop = 1;
         }
-        
+
         l_iError ++;
         usleep(100);
     }
-    
+
     PaUtil_TerminateBufferProcessor(&stream->bufferProcessor);
     PaUtil_TerminateStreamRepresentation(&stream->streamRepresentation);
     PaUtil_FreeMemory(stream);
@@ -546,10 +547,10 @@ PaError RequestStop(
        l_ptrOperation = pa_stream_cork(stream->outStream,
                                        1,
                                        NULL,
-                                       NULL);        
+                                       NULL);
 
         pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
-        
+
         while (pa_operation_get_state(l_ptrOperation) == PA_OPERATION_RUNNING)
         {
             pa_threaded_mainloop_wait(l_ptrPulseAudioHostApi->mainloop);
@@ -560,7 +561,7 @@ PaError RequestStop(
         pa_operation_unref(l_ptrOperation);
         l_ptrOperation = NULL;
     }
-        
+
     pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
 
   error:
