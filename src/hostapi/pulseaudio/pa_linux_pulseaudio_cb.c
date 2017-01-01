@@ -510,7 +510,7 @@ PaError PaPulseAudio_StartStreamCb(
 
     if (streamStarted)
     {
-        AbortStreamCb(stream);
+        PaPulseAudio_AbortStreamCb(stream);
     }
 
     stream->isActive = 0;
