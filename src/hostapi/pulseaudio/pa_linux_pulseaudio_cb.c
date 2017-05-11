@@ -90,11 +90,22 @@ void PaPulseAudio_StreamReadCb(
         return;
     }
 
+
     memset(l_ptrStream->inBuffer, 0x00, PULSEAUDIO_BUFFER_SIZE);
 
+    // Stream ain't active yet.
+    // Don't call callback before we have settled down
+    if(!l_ptrStream->isActive)
+    {
+      l_iResult = paComplete;
+    }
+    else
+    {
+      PaUtil_BeginCpuLoadMeasurement(&l_ptrStream->cpuLoadMeasurer);
+    }
 
-    PaUtil_BeginCpuLoadMeasurement(&l_ptrStream->cpuLoadMeasurer);
-
+    // If stream activated or not.. we have to
+    // read what there is coming to memory
     while (pa_stream_readable_size(s) > 0)
     {
         l_ptrSampleData = NULL;
@@ -117,40 +128,40 @@ void PaPulseAudio_StreamReadCb(
             PA_DEBUG(("Portaudio %s: Can't read!\n", __FUNCTION__));
         }
 
-
         pa_stream_drop(s);
-
     }
 
-    if (l_ptrStream->bufferProcessor.streamCallback != NULL)
+    if(l_ptrStream->isActive)
     {
-        PaUtil_BeginBufferProcessing(&l_ptrStream->bufferProcessor, &timeInfo,
-                                     0);
-        PaUtil_SetInterleavedInputChannels(&l_ptrStream->bufferProcessor, 0,
-                                           l_ptrStream->inBuffer,
-                                           l_ptrStream->inSampleSpec.channels);
-        PaUtil_SetInputFrameCount(&l_ptrStream->bufferProcessor,
-                                  l_lBufferSize / l_ptrStream->inputFrameSize);
-        numFrames =
-            PaUtil_EndBufferProcessing(&l_ptrStream->bufferProcessor,
-                                       &l_iResult);
+        if (l_ptrStream->bufferProcessor.streamCallback != NULL)
+        {
+            PaUtil_BeginBufferProcessing(&l_ptrStream->bufferProcessor, &timeInfo,
+                                         0);
+            PaUtil_SetInterleavedInputChannels(&l_ptrStream->bufferProcessor, 0,
+                                               l_ptrStream->inBuffer,
+                                               l_ptrStream->inSampleSpec.channels);
+            PaUtil_SetInputFrameCount(&l_ptrStream->bufferProcessor,
+                                      l_lBufferSize / l_ptrStream->inputFrameSize);
+            numFrames =
+                PaUtil_EndBufferProcessing(&l_ptrStream->bufferProcessor,
+                                           &l_iResult);
+        }
+        else
+        {
+            PaUtil_WriteRingBuffer(&l_ptrStream->inputRing, l_ptrStream->inBuffer,
+                                   l_lBufferSize);
+            // XXX should check whether all bytes were actually written
+        }
 
         PaUtil_EndCpuLoadMeasurement(&l_ptrStream->cpuLoadMeasurer, numFrames);
     }
-    else
-    {
-        PaUtil_WriteRingBuffer(&l_ptrStream->inputRing, l_ptrStream->inBuffer,
-                               l_lBufferSize);
-        // XXX should check whether all bytes were actually written
-    }
-
-    pa_threaded_mainloop_signal(l_ptrStream->mainloop, 0);
 
     if (l_iResult != paContinue)
     {
         l_ptrStream->isActive = 0;
-        return;
     }
+
+    pa_threaded_mainloop_signal(l_ptrStream->mainloop, 0);
 }
 
 void PaPulseAudio_StreamWriteCb(
@@ -172,6 +183,13 @@ void PaPulseAudio_StreamWriteCb(
         return;
     }
 
+    // Stream ain't active yet.
+    // Don't call callback before we have settled down
+    if(!l_ptrStream->isActive)
+    {
+      l_iResult = paComplete;
+    }
+
     memset(l_ptrStream->outBuffer, 0x00, PULSEAUDIO_BUFFER_SIZE);
 
     if(l_ptrStream->outputChannelCount == 1)
@@ -179,7 +197,7 @@ void PaPulseAudio_StreamWriteCb(
         length /= 2;
     }
 
-    if (l_ptrStream->bufferProcessor.streamCallback != NULL)
+    if (l_ptrStream->bufferProcessor.streamCallback != NULL && l_ptrStream->isActive)
     {
         PaUtil_BeginBufferProcessing(&l_ptrStream->bufferProcessor, &timeInfo,
                                      0);
@@ -210,10 +228,12 @@ void PaPulseAudio_StreamWriteCb(
        memset(l_ptrStream->outBuffer, 0x00, length);
     }
 
+    // Stream callback wants this to end so
+    // We are not allowed to call it again
+    // isActive marks for that
     if (l_iResult != paContinue)
     {
         l_ptrStream->isActive = 0;
-        return;
     }
 
     // If mono we assume to have stereo output
@@ -242,7 +262,11 @@ void PaPulseAudio_StreamWriteCb(
         PA_DEBUG(("Portaudio %s: Can't write audio!\n", __FUNCTION__));
     }
 
-    PaUtil_EndCpuLoadMeasurement(&l_ptrStream->cpuLoadMeasurer, numFrames);
+    if (l_ptrStream->isActive)
+    {
+        PaUtil_EndCpuLoadMeasurement(&l_ptrStream->cpuLoadMeasurer, numFrames);
+    }
+
     pa_threaded_mainloop_signal(l_ptrStream->mainloop, 0);
 }
 
