@@ -221,11 +221,10 @@ void PaPulseAudio_StreamWriteCb(
             length = numFrames * l_ptrStream->outputFrameSize;
         }
     }
-    else
+    else if(!l_ptrStream->bufferProcessor.streamCallback && l_ptrStream->isActive)
     {
        /* This Shouldn't happen but we are here so note that and fill audio with silence */
        PA_DEBUG(("Portaudio %s: We are not in callback-mode but we are in callback!\n", __FUNCTION__));
-       memset(l_ptrStream->outBuffer, 0x00, length);
     }
 
     // Stream callback wants this to end so
