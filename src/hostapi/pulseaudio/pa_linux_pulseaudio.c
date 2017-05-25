@@ -997,7 +997,7 @@ PaError OpenStream(
                       __FUNCTION__));
         }
 
-        stream->device = inputParameters->device;
+        stream->inDevice = inputParameters->device;
 
         if (!streamCallback)
         {
@@ -1114,7 +1114,7 @@ PaError OpenStream(
             }
         }
 
-        stream->device = outputParameters->device;
+        stream->outDevice = outputParameters->device;
     }
 
     else

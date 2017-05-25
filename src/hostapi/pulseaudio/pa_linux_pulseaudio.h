@@ -141,7 +141,8 @@ extern "C"
         int outputFrameSize;
         int inputFrameSize;
 
-        PaDeviceIndex device;
+        PaDeviceIndex inDevice;
+        PaDeviceIndex outDevice;
 
         void *outBuffer;
         void *inBuffer;
