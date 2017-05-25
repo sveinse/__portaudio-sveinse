@@ -63,9 +63,6 @@
 #include <string.h>
 #include <pulse/pulseaudio.h>
 
-#define PAPULSEAUDIO_MAX_DEVICECOUNT 1024
-#define PAPULSEAUDIO_MAX_DEVICENAME 1024
-
 /* This is used to identify process name for PulseAudio. */
 extern char *__progname;
 
@@ -222,6 +219,37 @@ void PaPulseAudio_CheckContextStateCb(
     pa_threaded_mainloop_signal(ptr->mainloop, 0);
 }
 
+void PaPulseAudio_ServerInfoCb(
+    pa_context *c,
+    const pa_server_info *i,
+    void *userdata
+)
+{
+  PaPulseAudio_HostApiRepresentation *l_ptrHostApi =
+      (PaPulseAudio_HostApiRepresentation *) userdata;
+  PaError result = paNoError;
+  const char *l_strName = NULL;
+
+  memset(l_ptrHostApi->pulseaudioDefaultSource, 0x00,
+         PAPULSEAUDIO_MAX_DEVICENAME);
+  memset(l_ptrHostApi->pulseaudioDefaultSink, 0x00,
+         PAPULSEAUDIO_MAX_DEVICENAME);
+
+  if(i->default_sink_name != NULL)
+  {
+    strncpy(l_ptrHostApi->pulseaudioDefaultSink, i->default_sink_name,
+            PAPULSEAUDIO_MAX_DEVICENAME);
+  }
+
+  if(i->default_source_name != NULL)
+  {
+    strncpy(l_ptrHostApi->pulseaudioDefaultSource, i->default_source_name, 64);
+  }
+
+  pa_threaded_mainloop_signal(l_ptrHostApi->mainloop, 0);
+}
+
+
 int _PaPulseAudio_AddAudioDevice(
     PaPulseAudio_HostApiRepresentation *hostapi,
     const char *PaPulseAudio_SinkSourceName,
@@ -243,17 +271,14 @@ int _PaPulseAudio_AddAudioDevice(
 
     hostapi->deviceInfoArray[hostapi->deviceCount].structVersion = 2;
     hostapi->deviceInfoArray[hostapi->deviceCount].hostApi = hostapi->hostApiIndex;
-    
     hostapi->pulseaudioDeviceNames[hostapi->deviceCount] = PaUtil_GroupAllocateMemory(hostapi->allocations,
                                                            l_iRealNameLen);
     l_strLocalName = PaUtil_GroupAllocateMemory(hostapi->allocations,
                                                            l_iDeviceNameLen);
-  
     if( !hostapi->pulseaudioDeviceNames[hostapi->deviceCount] &&
         !l_strLocalName)
     {
-       PA_PULSEAUDIO_SET_LAST_HOST_ERROR(0,
-                                         "Can't alloc memory"); 
+       PA_PULSEAUDIO_SET_LAST_HOST_ERROR(0, "Can't alloc memory");
        return paInsufficientMemory;
     }
 
@@ -262,6 +287,24 @@ int _PaPulseAudio_AddAudioDevice(
 
     strncpy(l_strLocalName,
           PaPulseAudio_SinkSourceName, (l_iDeviceNameLen - 1));
+
+    if(!strncmp(PaPulseAudio_SinkSourceNameDesc,
+               hostapi->pulseaudioDefaultSource,
+              PAPULSEAUDIO_MAX_DEVICENAME))
+    {
+      hostapi->inheritedHostApiRep.info.defaultInputDevice =
+         hostapi->deviceCount;
+    }
+
+    if(!strncmp(PaPulseAudio_SinkSourceNameDesc,
+               hostapi->pulseaudioDefaultSink,
+              PAPULSEAUDIO_MAX_DEVICENAME))
+    {
+      hostapi->inheritedHostApiRep.info.defaultOutputDevice =
+         hostapi->deviceCount;
+    }
+
+
 
     hostapi->deviceInfoArray[hostapi->deviceCount].name = l_strLocalName;
 
@@ -410,25 +453,7 @@ void PaPulseAudio_StreamStateCb(
             break;
 
         case PA_STREAM_READY:
-            /* Mainly here if you need debug printing
-             * 
-             * fprintf(stderr, "PaPulseAudio_StreamStateCb: Stream successfully created.\n");
-             * 
-             * if (!(a = pa_stream_get_buffer_attr(s)))
-             * fprintf(stderr, "pa_stream_get_buffer_attr() failed: %s\n", pa_strerror(pa_context_errno(pa_stream_get_context(s))));
-             * else {
-             * fprintf(stderr, "PaPulseAudio_StreamStateCb: Buffer metrics: maxlength=%u, tlength=%u, prebuf=%u, minreq=%u\n", a->maxlength, a->tlength, a->prebuf, a->minreq);
-             * }
-             * 
-             * fprintf(stderr, "PaPulseAudio_StreamStateCb: Using sample spec '%s', channel map '%s'.\n",
-             * pa_sample_spec_snprint(sst, sizeof(sst), pa_stream_get_sample_spec(s)),
-             * pa_channel_map_snprint(cmt, sizeof(cmt), pa_stream_get_channel_map(s)));
-             * 
-             * fprintf(stderr, "PaPulseAudio_StreamStateCb: Connected to device %s (%u, %ssuspended).\n",
-             * pa_stream_get_device_name(s),
-             * pa_stream_get_device_index(s),
-             * pa_stream_is_suspended(s) ? "" : "not "); */
-            break;
+             break;
 
         case PA_STREAM_FAILED:
         default:
@@ -557,6 +582,19 @@ PaError PaPulseAudio_Initialize(
         l_ptrPulseAudioHostApi->pulseaudioDeviceNames[i] = NULL;
     }
 
+    /* Get info about server. This returns Default sink and soure name. */
+    l_ptrOperation =
+    pa_context_get_server_info(l_ptrPulseAudioHostApi->context,
+                               PaPulseAudio_ServerInfoCb,
+                               l_ptrPulseAudioHostApi);
+
+    while (pa_operation_get_state(l_ptrOperation) == PA_OPERATION_RUNNING)
+    {
+        pa_threaded_mainloop_wait(l_ptrPulseAudioHostApi->mainloop);
+    }
+
+    pa_operation_unref(l_ptrOperation);
+
     /* List PulseAudio sinks. If found callback: PaPulseAudio_SinkListCb */
     l_ptrOperation =
         pa_context_get_sink_info_list(l_ptrPulseAudioHostApi->context,
@@ -607,27 +645,6 @@ PaError PaPulseAudio_Initialize(
             (*hostApi)->deviceInfos[i] =
                 &l_ptrPulseAudioHostApi->deviceInfoArray[i];
         }
-
-        /* First should be the default */
-        (*hostApi)->info.defaultInputDevice = -1;
-        (*hostApi)->info.defaultOutputDevice = -1;
-
-        for (i = 0; i < l_ptrPulseAudioHostApi->deviceCount; i++)
-        {
-            if (l_ptrPulseAudioHostApi->deviceInfoArray[i].maxInputChannels > 0
-                && (*hostApi)->info.defaultInputDevice == -1)
-            {
-                (*hostApi)->info.defaultInputDevice = i;
-            }
-
-            if (l_ptrPulseAudioHostApi->deviceInfoArray[i].maxOutputChannels > 0
-                && (*hostApi)->info.defaultOutputDevice == -1)
-            {
-                (*hostApi)->info.defaultOutputDevice = i;
-            }
-        }
-
-
     }
 
     (*hostApi)->Terminate = Terminate;

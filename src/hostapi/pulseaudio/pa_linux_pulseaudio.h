@@ -77,6 +77,9 @@ extern "C"
    @todo change this to something more sophisticated */
 #define PULSEAUDIO_TIME_EVENT_USEC 50000
 
+#define PAPULSEAUDIO_MAX_DEVICECOUNT 1024
+#define PAPULSEAUDIO_MAX_DEVICENAME 1024
+
 /* Assuming of 2 seconds of 44100 Hz sample rate with FLOAT (4 bytes) and stereo channels (2 channels).
    You should have pretty good size buffer with this. If output/intput doesn't happens in 2 second we
    have more trouble than this buffer.
@@ -94,6 +97,8 @@ extern "C"
         PaHostApiIndex hostApiIndex;
         PaDeviceInfo deviceInfoArray[1024];
         char *pulseaudioDeviceNames[1024];
+        char pulseaudioDefaultSource[PAPULSEAUDIO_MAX_DEVICENAME + 1];
+        char pulseaudioDefaultSink[PAPULSEAUDIO_MAX_DEVICENAME + 1];
 
         /* PulseAudio stuff goes here */
         pa_threaded_mainloop *mainloop;
@@ -211,6 +216,11 @@ extern "C"
     void PaPulseAudio_CheckContextStateCb(
     pa_context * c,
     void *userdata
+    );
+    void PaPulseAudio_ServerInfoCb(
+        pa_context *c,
+        const pa_server_info *i,
+        void *userdata
     );
     void PaPulseAudio_SinkListCb(
     pa_context * c,
