@@ -427,16 +427,16 @@ PaError PaPulseAudio_StartStreamCb(
                       PaUtil_AllocateMemory(PULSEAUDIO_BUFFER_SIZE),
                       paInsufficientMemory);
 
-            if (stream->device != paNoDevice)
+            if (stream->outDevice != paNoDevice)
             {
-                PA_DEBUG(("Portaudio %s: %d (%s)\n", __FUNCTION__, stream->device,
+                PA_DEBUG(("Portaudio %s: %d (%s)\n", __FUNCTION__, stream->outDevice,
                           l_ptrPulseAudioHostApi->pulseaudioDeviceNames[stream->
-                                                                        device]));
+                                                                        outDevice]));
             }
 
             pa_stream_connect_playback(stream->outStream,
                                        l_ptrPulseAudioHostApi->
-                                       pulseaudioDeviceNames[stream->device],
+                                       pulseaudioDeviceNames[stream->outDevice],
                                        &stream->bufferAttr,
                                        PA_STREAM_INTERPOLATE_TIMING |
                                        PA_STREAM_ADJUST_LATENCY |
@@ -463,9 +463,16 @@ PaError PaPulseAudio_StartStreamCb(
                   PaUtil_AllocateMemory(PULSEAUDIO_BUFFER_SIZE),
                   paInsufficientMemory);
 
+        if (stream->inDevice != paNoDevice)
+        {
+            PA_DEBUG(("Portaudio %s: %d (%s)\n", __FUNCTION__, stream->inDevice,
+                      l_ptrPulseAudioHostApi->pulseaudioDeviceNames[stream->
+                                                                    inDevice]));
+        }
+
         pa_stream_connect_record(stream->inStream,
                                  l_ptrPulseAudioHostApi->
-                                 pulseaudioDeviceNames[stream->device],
+                                 pulseaudioDeviceNames[stream->inDevice],
                                  &stream->bufferAttr,
                                  PA_STREAM_INTERPOLATE_TIMING |
                                  PA_STREAM_ADJUST_LATENCY |
