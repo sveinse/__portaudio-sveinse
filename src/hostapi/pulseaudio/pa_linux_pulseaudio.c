@@ -266,7 +266,6 @@ int _PaPulseAudio_AddAudioDevice(
     /* These should be at least 1 */
     int l_iRealNameLen = strnlen(PaPulseAudio_SinkSourceNameDesc, PAPULSEAUDIO_MAX_DEVICENAME) + 1;
     int l_iDeviceNameLen = strnlen(PaPulseAudio_SinkSourceName, PAPULSEAUDIO_MAX_DEVICENAME) + 1;
-    char *l_ptrName = NULL;
     char *l_strLocalName = NULL;
 
     hostapi->deviceInfoArray[hostapi->deviceCount].structVersion = 2;
@@ -308,8 +307,6 @@ int _PaPulseAudio_AddAudioDevice(
 
     hostapi->deviceInfoArray[hostapi->deviceCount].name = l_strLocalName;
 
-    l_ptrName = l_strLocalName + (l_iDeviceNameLen - 1);
-    l_ptrName = '\0';
     hostapi->pulseaudioDeviceNames[hostapi->deviceCount][l_iRealNameLen - 1] = '\0';
 
     hostapi->deviceInfoArray[hostapi->deviceCount].maxInputChannels = inputChannels;
