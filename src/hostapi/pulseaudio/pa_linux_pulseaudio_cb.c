@@ -362,12 +362,6 @@ PaError PaPulseAudio_CloseStreamCb(
         usleep(100);
     }
 
-    /* Eventually notify user all buffers have played */
-    if (stream->streamRepresentation.streamFinishedCallback)
-    {
-        stream->streamRepresentation.streamFinishedCallback(stream->streamRepresentation.userData);
-    }
-
     PaUtil_TerminateBufferProcessor(&stream->bufferProcessor);
     PaUtil_TerminateStreamRepresentation(&stream->streamRepresentation);
     PaUtil_FreeMemory(stream);
@@ -595,6 +589,12 @@ PaError RequestStop(
     }
 
     pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
+
+    /* Eventually notify user all buffers have played */
+    if (stream->streamRepresentation.streamFinishedCallback)
+    {
+        stream->streamRepresentation.streamFinishedCallback(stream->streamRepresentation.userData);
+    }
 
   error:
     stream->isActive = 0;
