@@ -378,9 +378,6 @@ PaError PaPulseAudio_CloseStreamCb(
     PaUtil_TerminateStreamRepresentation(&stream->streamRepresentation);
     PaUtil_FreeMemory(stream);
 
-    stream->isStopped = 1;
-    stream->isActive = 0;
-
     return result;
 }
 
