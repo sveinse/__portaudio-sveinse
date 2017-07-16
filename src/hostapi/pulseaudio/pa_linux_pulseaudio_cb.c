@@ -158,13 +158,13 @@ void PaPulseAudio_StreamReadCb(
 
     if (l_iResult != paContinue)
     {
-        l_ptrStream->isActive = 0;
+      // Eventually notify user all buffers have played
+    	if (l_ptrStream->streamRepresentation.streamFinishedCallback && l_ptrStream->isActive)
+    	{
+    	   l_ptrStream->streamRepresentation.streamFinishedCallback(l_ptrStream->streamRepresentation.userData);
+    	}
 
-	// Eventually notify user all buffers have played
-	if (l_ptrStream->streamRepresentation.streamFinishedCallback)
-	{
-	   l_ptrStream->streamRepresentation.streamFinishedCallback(l_ptrStream->streamRepresentation.userData);
-	}
+      l_ptrStream->isActive = 0;
     }
 
     pa_threaded_mainloop_signal(l_ptrStream->mainloop, 0);
@@ -238,13 +238,13 @@ void PaPulseAudio_StreamWriteCb(
     // isActive marks for that
     if (l_iResult != paContinue)
     {
-        l_ptrStream->isActive = 0;
+        // Eventually notify user all buffers have played
+        if (l_ptrStream->streamRepresentation.streamFinishedCallback && l_ptrStream->isActive)
+        {
+                  l_ptrStream->streamRepresentation.streamFinishedCallback(l_ptrStream->streamRepresentation.userData);
+        }
 
-	// Eventually notify user all buffers have played
-	if (l_ptrStream->streamRepresentation.streamFinishedCallback)
-	{
-	   l_ptrStream->streamRepresentation.streamFinishedCallback(l_ptrStream->streamRepresentation.userData);
-	}
+        l_ptrStream->isActive = 0;
     }
 
     // If mono we assume to have stereo output
