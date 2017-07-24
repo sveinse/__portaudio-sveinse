@@ -67,7 +67,7 @@
 #include <string.h>
 #include <unistd.h>
 
-void PaPulseAudio_StreamReadCb(
+void PaPulseAudio_StreamRecordCb(
     pa_stream * s,
     size_t length,
     void *userdata
@@ -170,7 +170,7 @@ void PaPulseAudio_StreamReadCb(
     pa_threaded_mainloop_signal(l_ptrStream->mainloop, 0);
 }
 
-void PaPulseAudio_StreamWriteCb(
+void PaPulseAudio_StreamPlaybackCb(
     pa_stream * s,
     size_t length,
     void *userdata

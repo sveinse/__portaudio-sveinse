@@ -95,8 +95,8 @@ extern "C"
         PaUtilAllocationGroup *allocations;
 
         PaHostApiIndex hostApiIndex;
-        PaDeviceInfo deviceInfoArray[1024];
-        char *pulseaudioDeviceNames[1024];
+        PaDeviceInfo deviceInfoArray[PAPULSEAUDIO_MAX_DEVICECOUNT];
+        char *pulseaudioDeviceNames[PAPULSEAUDIO_MAX_DEVICECOUNT];
         char pulseaudioDefaultSource[PAPULSEAUDIO_MAX_DEVICENAME + 1];
         char pulseaudioDefaultSink[PAPULSEAUDIO_MAX_DEVICENAME + 1];
 

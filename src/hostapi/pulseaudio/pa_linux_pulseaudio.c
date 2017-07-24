@@ -984,7 +984,7 @@ PaError OpenStream(
             pa_stream_set_started_callback(stream->inStream,
                                            PaPulseAudio_StreamStartedCb, NULL);
             pa_stream_set_read_callback(stream->inStream,
-                                        PaPulseAudio_StreamReadCb, stream);
+                                        PaPulseAudio_StreamRecordCb, stream);
 
         }
 
@@ -1091,7 +1091,7 @@ PaError OpenStream(
             if (streamCallback)
             {
                 pa_stream_set_write_callback(stream->outStream,
-                                             PaPulseAudio_StreamWriteCb, stream);
+                                             PaPulseAudio_StreamPlaybackCb, stream);
             }
         }
 
