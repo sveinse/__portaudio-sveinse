@@ -81,12 +81,12 @@ extern "C"
     PaStream * stream
     );
 
-    void PaPulseAudio_StreamReadCb(
+    void PaPulseAudio_StreamRecordCb(
     pa_stream * s,
     size_t length,
     void *userdata
     );
-    void PaPulseAudio_StreamWriteCb(
+    void PaPulseAudio_StreamPlaybackCb(
     pa_stream * s,
     size_t length,
     void *userdata
