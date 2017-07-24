@@ -67,6 +67,46 @@
 #include <string.h>
 #include <unistd.h>
 
+void PaPulseAudio_updateTimeInfo(
+  pa_stream * s,
+  PaStreamCallbackTimeInfo *timeInfo,
+  int record
+)
+{
+  unsigned int l_iNegative = 0;
+  pa_usec_t l_lStreamTime = 0;
+  pa_usec_t l_lStreamLatency = 0;
+
+  if (pa_stream_get_time(s, &l_lStreamTime) ==
+      -PA_ERR_NODATA)
+  {
+      PA_DEBUG(("Portaudio %s: No time available!\n", __FUNCTION__));
+  }
+  else
+  {
+    timeInfo->currentTime = ((float) l_lStreamTime / (float) 1000000);
+  }
+
+  if (pa_stream_get_latency(s, &l_lStreamLatency, &l_iNegative) ==
+      -PA_ERR_NODATA)
+  {
+      PA_DEBUG(("Portaudio %s: No latency available!\n", __FUNCTION__));
+  }
+  else
+  {
+      if(record == 0)
+      {
+         timeInfo->outputBufferDacTime = ((float) l_lStreamLatency / (float) 1000000);
+      }
+      else
+      {
+        timeInfo->inputBufferAdcTime = ((float) l_lStreamLatency / (float) 1000000);
+      }
+  }
+
+}
+
+
 void PaPulseAudio_StreamRecordCb(
     pa_stream * s,
     size_t length,
@@ -103,6 +143,8 @@ void PaPulseAudio_StreamRecordCb(
     {
       PaUtil_BeginCpuLoadMeasurement(&l_ptrStream->cpuLoadMeasurer);
     }
+
+    PaPulseAudio_updateTimeInfo(s, &timeInfo, 1);
 
     // If stream activated or not.. we have to
     // read what there is coming to memory
@@ -181,9 +223,6 @@ void PaPulseAudio_StreamPlaybackCb(
     int l_iResult = paContinue;
     long numFrames = 0;
     unsigned int i = 0;
-    unsigned int l_iNegative = 0;
-    pa_usec_t l_lStreamTime = 0;
-    pa_usec_t l_lStreamLatency = 0;
 
     if (l_ptrStream == NULL)
     {
@@ -205,25 +244,7 @@ void PaPulseAudio_StreamPlaybackCb(
         length /= 2;
     }
 
-    if (pa_stream_get_time(s, &l_lStreamTime) ==
-        -PA_ERR_NODATA)
-    {
-        PA_DEBUG(("Portaudio %s: No time available!\n", __FUNCTION__));
-    }
-    else
-    {
-      timeInfo.currentTime = ((float) l_lStreamTime / (float) 1000000);
-    }
-
-    if (pa_stream_get_latency(s, &l_lStreamLatency, &l_iNegative) ==
-        -PA_ERR_NODATA)
-    {
-        PA_DEBUG(("Portaudio %s: No latency available!\n", __FUNCTION__));
-    }
-    else
-    {
-        timeInfo.outputBufferDacTime = ((float) l_lStreamLatency / (float) 1000000);
-    }
+    PaPulseAudio_updateTimeInfo(s, &timeInfo, 0);
 
     if (l_ptrStream->bufferProcessor.streamCallback != NULL && l_ptrStream->isActive)
     {
