@@ -181,7 +181,9 @@ void PaPulseAudio_StreamPlaybackCb(
     int l_iResult = paContinue;
     long numFrames = 0;
     unsigned int i = 0;
-
+    unsigned int l_iNegative = 0;
+    pa_usec_t l_lStreamTime = 0;
+    pa_usec_t l_lStreamLatency = 0;
 
     if (l_ptrStream == NULL)
     {
@@ -201,6 +203,26 @@ void PaPulseAudio_StreamPlaybackCb(
     if(l_ptrStream->outputChannelCount == 1)
     {
         length /= 2;
+    }
+
+    if (pa_stream_get_time(s, &l_lStreamTime) ==
+        -PA_ERR_NODATA)
+    {
+        PA_DEBUG(("Portaudio %s: No time available!\n", __FUNCTION__));
+    }
+    else
+    {
+      timeInfo.currentTime = ((float) l_lStreamTime / (float) 1000000);
+    }
+
+    if (pa_stream_get_latency(s, &l_lStreamLatency, &l_iNegative) ==
+        -PA_ERR_NODATA)
+    {
+        PA_DEBUG(("Portaudio %s: No latency available!\n", __FUNCTION__));
+    }
+    else
+    {
+        timeInfo.outputBufferDacTime = ((float) l_lStreamLatency / (float) 1000000);
     }
 
     if (l_ptrStream->bufferProcessor.streamCallback != NULL && l_ptrStream->isActive)
