@@ -287,6 +287,8 @@ int _PaPulseAudio_AddAudioDevice(
     strncpy(l_strLocalName,
           PaPulseAudio_SinkSourceName, (l_iDeviceNameLen - 1));
 
+    l_strLocalName[(l_iDeviceNameLen - 1)] = '\0';
+
     if(!strncmp(PaPulseAudio_SinkSourceNameDesc,
                hostapi->pulseaudioDefaultSource,
               PAPULSEAUDIO_MAX_DEVICENAME))
