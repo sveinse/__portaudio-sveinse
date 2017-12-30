@@ -915,7 +915,6 @@ PaError OpenStream(
 
     stream->inStream = NULL;
     stream->outStream = NULL;
-    stream->outBuffer = NULL;
     stream->inBuffer = NULL;
     memset(&stream->outputRing, 0x00, sizeof(PaUtilRingBuffer));
     memset(&stream->inputRing, 0x00, sizeof(PaUtilRingBuffer));

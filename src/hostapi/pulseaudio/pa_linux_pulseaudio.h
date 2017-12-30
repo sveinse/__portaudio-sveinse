@@ -144,7 +144,6 @@ extern "C"
         PaDeviceIndex inDevice;
         PaDeviceIndex outDevice;
 
-        void *outBuffer;
         void *inBuffer;
 
         PaUtilRingBuffer inputRing;

@@ -223,6 +223,7 @@ void PaPulseAudio_StreamPlaybackCb(
     int l_iResult = paContinue;
     long numFrames = 0;
     unsigned int i = 0;
+    void *l_ptrBuf = NULL;
 
     if (l_ptrStream == NULL)
     {
@@ -237,14 +238,20 @@ void PaPulseAudio_StreamPlaybackCb(
       l_iResult = paComplete;
     }
 
-    memset(l_ptrStream->outBuffer, 0x00, PULSEAUDIO_BUFFER_SIZE);
-
     if(l_ptrStream->outputChannelCount == 1)
     {
         length /= 2;
     }
 
     PaPulseAudio_updateTimeInfo(s, &timeInfo, 0);
+
+    if (pa_stream_begin_write(s, &l_ptrBuf, &length) < 0)
+    {
+              PA_DEBUG(("Portaudio %s: Can't do pa_stream_begin_write!\n", __FUNCTION__));
+              return;
+    }
+
+    memset(l_ptrBuf, 0x00, length);
 
     if (l_ptrStream->bufferProcessor.streamCallback != NULL && l_ptrStream->isActive)
     {
@@ -254,7 +261,7 @@ void PaPulseAudio_StreamPlaybackCb(
 
         PaUtil_SetInterleavedOutputChannels(&l_ptrStream->bufferProcessor,
                                             0,
-                                            l_ptrStream->outBuffer,
+                                            l_ptrBuf,
                                             l_ptrStream->outputChannelCount);
         PaUtil_SetOutputFrameCount(&l_ptrStream->bufferProcessor,
                                    length / l_ptrStream->outputFrameSize);
@@ -295,8 +302,8 @@ void PaPulseAudio_StreamPlaybackCb(
     // Little bit hackish but works.. with float currently
     if(l_ptrStream->outputChannelCount == 1)
     {
-        void *l_ptrStartOrig = l_ptrStream->outBuffer + length;
-        void *l_ptrStartStereo = l_ptrStream->outBuffer;
+        void *l_ptrStartOrig = l_ptrBuf + length;
+        void *l_ptrStartStereo = l_ptrBuf;
         memcpy(l_ptrStartOrig, l_ptrStartStereo, length);
 
         for(i = 0; i < length; i += l_ptrStream->outputFrameSize)
@@ -311,7 +318,7 @@ void PaPulseAudio_StreamPlaybackCb(
         memcpy(l_ptrStartStereo, l_ptrStartOrig, length);
     }
 
-    if (pa_stream_write(s, l_ptrStream->outBuffer, length, NULL, 0, PA_SEEK_RELATIVE))
+    if (pa_stream_write(s, l_ptrBuf, length, NULL, 0, PA_SEEK_RELATIVE))
     {
         PA_DEBUG(("Portaudio %s: Can't write audio!\n", __FUNCTION__));
     }
@@ -319,6 +326,10 @@ void PaPulseAudio_StreamPlaybackCb(
     if (l_ptrStream->isActive)
     {
         PaUtil_EndCpuLoadMeasurement(&l_ptrStream->cpuLoadMeasurer, numFrames);
+    }
+    else
+    {
+        pa_stream_cancel_write(s);
     }
 
     pa_threaded_mainloop_signal(l_ptrStream->mainloop, 0);
@@ -403,9 +414,6 @@ PaError PaPulseAudio_CloseStreamCb(
         {
             pa_stream_unref(stream->outStream);
             stream->outStream = NULL;
-
-            PaUtil_FreeMemory(stream->outBuffer);
-            stream->outBuffer = NULL;
         }
 
         if((stream->outStream == NULL && stream->inStream == NULL) || l_iError >= 5000)
@@ -474,10 +482,6 @@ PaError PaPulseAudio_StartStreamCb(
             stream->bufferAttr.minreq = pa_usec_to_bytes(0, &stream->outSampleSpec);
             stream->bufferAttr.tlength =
                 pa_usec_to_bytes(stream->latency, &stream->outSampleSpec);
-
-            PA_UNLESS(stream->outBuffer =
-                      PaUtil_AllocateMemory(PULSEAUDIO_BUFFER_SIZE),
-                      paInsufficientMemory);
 
             if (stream->outDevice != paNoDevice)
             {
