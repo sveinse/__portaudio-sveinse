@@ -456,14 +456,12 @@ PaError PaPulseAudio_StartStreamCb(
                                            0,
                                            NULL,
                                            NULL);
-            pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
 
             while (pa_operation_get_state(l_ptrOperation) == PA_OPERATION_RUNNING)
             {
                 pa_threaded_mainloop_wait(l_ptrPulseAudioHostApi->mainloop);
             }
 
-            pa_threaded_mainloop_lock(l_ptrPulseAudioHostApi->mainloop);
             pa_operation_unref(l_ptrOperation);
             l_ptrOperation = NULL;
         }
@@ -535,14 +533,11 @@ PaError PaPulseAudio_StartStreamCb(
                                          PaPulseAudio_StreamUnderflowCb, stream);
     }
 
-    pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
-
     if (stream->outStream != NULL || stream->inStream != NULL)
     {
         while (1)
         {
             pa_threaded_mainloop_wait(l_ptrPulseAudioHostApi->mainloop);
-            pa_threaded_mainloop_lock(l_ptrPulseAudioHostApi->mainloop);
 
             if (stream->outStream != NULL)
             {
@@ -571,8 +566,6 @@ PaError PaPulseAudio_StartStreamCb(
             {
                 break;
             }
-
-            pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
 
             usleep(1000);
         }
@@ -627,22 +620,18 @@ PaError RequestStop(
                                        NULL,
                                        NULL);
 
-        pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
-
         while (pa_operation_get_state(l_ptrOperation) == PA_OPERATION_RUNNING)
         {
             pa_threaded_mainloop_wait(l_ptrPulseAudioHostApi->mainloop);
         }
 
-        pa_threaded_mainloop_lock(l_ptrPulseAudioHostApi->mainloop);
-
         pa_operation_unref(l_ptrOperation);
+
         l_ptrOperation = NULL;
     }
 
-    pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
-
   error:
+    pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
     stream->isActive = 0;
     stream->isStopped = 1;
 

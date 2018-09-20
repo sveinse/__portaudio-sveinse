@@ -617,7 +617,6 @@ PaError PaPulseAudio_Initialize(
     }
 
     pa_operation_unref(l_ptrOperation);
-    pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
 
     (*hostApi)->info.deviceCount = l_ptrPulseAudioHostApi->deviceCount;
 
@@ -665,6 +664,7 @@ PaError PaPulseAudio_Initialize(
          PaPulseAudio_GetStreamReadAvailableBlock,
          PaPulseAudio_GetStreamWriteAvailableBlock);
 
+    pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
     return result;
 
   error:
@@ -681,6 +681,7 @@ PaError PaPulseAudio_Initialize(
         l_ptrPulseAudioHostApi = NULL;
     }
 
+    pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
     return result;
 }
 
