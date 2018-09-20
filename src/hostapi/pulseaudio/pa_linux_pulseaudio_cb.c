@@ -336,11 +336,25 @@ static void PaPulseAudio_StreamSuccessCb(
 }
 
 /* This is left for future use! */
+static void PaPulseAudio_CorkSuccessCb(
+    pa_stream * s,
+    int success,
+    void *userdata
+)
+{
+    PaPulseAudio_Stream *l_ptrStream = (PaPulseAudio_Stream *) userdata;
+    pa_threaded_mainloop_signal(l_ptrStream->mainloop, 0);
+}
+
+
+/* This is left for future use! */
 void PaPulseAudio_StreamStartedCb(
     pa_stream * stream,
     void *userdata
 )
 {
+    PaPulseAudio_Stream *l_ptrStream = (PaPulseAudio_Stream *) userdata;
+    pa_threaded_mainloop_signal(l_ptrStream->mainloop, 0);
 }
 
 
@@ -454,8 +468,8 @@ PaError PaPulseAudio_StartStreamCb(
         {
            l_ptrOperation = pa_stream_cork(stream->outStream,
                                            0,
-                                           NULL,
-                                           NULL);
+                                           PaPulseAudio_CorkSuccessCb,
+                                           stream);
 
             while (pa_operation_get_state(l_ptrOperation) == PA_OPERATION_RUNNING)
             {
@@ -496,6 +510,8 @@ PaError PaPulseAudio_StartStreamCb(
 
             pa_stream_set_underflow_callback(stream->outStream,
                                              PaPulseAudio_StreamUnderflowCb, stream);
+            pa_stream_set_started_callback(stream->outStream,
+                                             PaPulseAudio_StreamStartedCb, stream);
 
             l_strName = NULL;
         }
@@ -531,14 +547,19 @@ PaError PaPulseAudio_StartStreamCb(
                                  PA_STREAM_NO_REMAP_CHANNELS);
         pa_stream_set_underflow_callback(stream->inStream,
                                          PaPulseAudio_StreamUnderflowCb, stream);
+
+        pa_stream_set_started_callback(stream->inStream,
+                                       PaPulseAudio_StreamStartedCb, stream);
+
     }
+
+    pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
 
     if (stream->outStream != NULL || stream->inStream != NULL)
     {
         while (1)
         {
-            pa_threaded_mainloop_wait(l_ptrPulseAudioHostApi->mainloop);
-
+            pa_threaded_mainloop_lock(l_ptrPulseAudioHostApi->mainloop);
             if (stream->outStream != NULL)
             {
                 if (PA_STREAM_READY == pa_stream_get_state(stream->outStream))
@@ -566,6 +587,7 @@ PaError PaPulseAudio_StartStreamCb(
             {
                 break;
             }
+            pa_threaded_mainloop_unlock(l_ptrPulseAudioHostApi->mainloop);
 
             usleep(1000);
         }
@@ -617,8 +639,8 @@ PaError RequestStop(
     {
        l_ptrOperation = pa_stream_cork(stream->outStream,
                                        1,
-                                       NULL,
-                                       NULL);
+                                       PaPulseAudio_CorkSuccessCb,
+                                       stream);
 
         while (pa_operation_get_state(l_ptrOperation) == PA_OPERATION_RUNNING)
         {
